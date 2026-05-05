@@ -54,7 +54,8 @@ export class Tracker {
 
   // type: 'ff' | 'proj'
   // selectedIdx: 선택된 점 인덱스 (-1이면 없음)
-  draw(ctx, type = 'ff', selectedIdx = -1) {
+  // hColor, vColor: 점선 색상 (hex or rgba)
+  draw(ctx, type = 'ff', selectedIdx = -1, hColor = '#64d2ff', vColor = '#64ffa0') {
     if (this.points.length === 0) return;
     ctx.save();
 
@@ -76,14 +77,12 @@ export class Tracker {
       ctx.setLineDash([4, 4]);
 
       if (type === 'ff') {
-        // 자유낙하: 가로 점선만 (하늘색)
-        ctx.strokeStyle = 'rgba(100, 210, 255, 0.45)';
+        ctx.strokeStyle = hColor;
         ctx.beginPath(); ctx.moveTo(0, p.yPx); ctx.lineTo(W, p.yPx); ctx.stroke();
       } else {
-        // 수평투사: 가로(하늘색) + 세로(연두색)
-        ctx.strokeStyle = 'rgba(100, 210, 255, 0.45)';
+        ctx.strokeStyle = hColor;
         ctx.beginPath(); ctx.moveTo(0, p.yPx); ctx.lineTo(W, p.yPx); ctx.stroke();
-        ctx.strokeStyle = 'rgba(100, 255, 160, 0.45)';
+        ctx.strokeStyle = vColor;
         ctx.beginPath(); ctx.moveTo(p.xPx, 0); ctx.lineTo(p.xPx, H); ctx.stroke();
       }
       ctx.setLineDash([]);

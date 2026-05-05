@@ -525,10 +525,13 @@ function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctrl.drawCurrentFrame();
   calibration.draw(ctx);
-  activeTracker().draw(ctx, activeVideo, selectedPointIdx);
+  activeTracker().draw(ctx, activeVideo, selectedPointIdx, $('color-h').value, $('color-v').value);
 }
 
 // ── 결과 화면 ─────────────────────────────────────────
+$('color-h').addEventListener('input', redraw);
+$('color-v').addEventListener('input', redraw);
+
 $('btn-to-result').addEventListener('click', () => { showScreen('result'); renderAllGraphs(); });
 
 function renderAllGraphs() {

@@ -149,7 +149,15 @@
       <span id="calib-status">보정 미완료</span>
       <span id="mode-hint"></span>
 
-      <button id="btn-to-result" class="btn-primary" style="margin-left:auto;">결과 보기 →</button>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-dim);">
+          가로선 <input type="color" id="color-h" value="#64d2ff" title="가로 점선 색상" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;">
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-dim);">
+          세로선 <input type="color" id="color-v" value="#64ffa0" title="세로 점선 색상 (수평투사)" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;">
+        </label>
+        <button id="btn-to-result" class="btn-primary">결과 보기 →</button>
+      </div>
     </div>
 
     <!-- 자동 추적 패널 -->
