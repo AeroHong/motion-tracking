@@ -34,6 +34,47 @@
     </button>
   </section>
 
+  <!-- ── 접속 차단 화면 ───────────────────────── -->
+  <section id="screen-blocked" class="hidden">
+    <div class="blocked-card">
+      <div class="blocked-icon">🔒</div>
+      <h2>접속이 제한된 계정입니다</h2>
+      <p>
+        현재 로그인한 계정(<strong id="blocked-domain"></strong> 도메인)은<br>
+        이 서비스를 이용할 수 없습니다.
+      </p>
+      <p class="blocked-guide">
+        학교에서 발급한 구글 계정으로 다시 로그인해주세요.<br>
+        계정 관련 문의는 담당 선생님께 문의하세요.
+      </p>
+      <button id="btn-blocked-logout" class="btn-primary">다른 계정으로 로그인</button>
+    </div>
+  </section>
+
+  <!-- ── 관리자 화면 ─────────────────────────── -->
+  <section id="screen-admin" class="hidden">
+    <div class="admin-container">
+      <div class="admin-header">
+        <h2>🛠 관리자 설정</h2>
+        <span id="admin-email" class="admin-email-badge"></span>
+      </div>
+
+      <div class="admin-card">
+        <h3>허용 도메인 관리</h3>
+        <p class="admin-desc">등록된 도메인의 학교 구글 계정만 앱에 접속할 수 있습니다.</p>
+
+        <div class="domain-input-row">
+          <span class="domain-at">@</span>
+          <input type="text" id="domain-input" placeholder="sunyu.hs.kr" autocomplete="off" autocapitalize="off">
+          <button id="btn-add-domain" class="btn-primary">추가</button>
+        </div>
+        <p id="domain-error" class="domain-error"></p>
+
+        <ul id="domain-list" class="domain-list"></ul>
+      </div>
+    </div>
+  </section>
+
   <!-- ── Step 2: 영상 업로드 ───────────────────── -->
   <section id="screen-upload" class="hidden">
     <div class="upload-card">
@@ -79,7 +120,8 @@
 
       <!-- 모드 선택 -->
       <button id="btn-mode-calib" class="mode-btn btn-secondary">📏 보정</button>
-      <button id="btn-mode-track" class="mode-btn btn-secondary">📍 트래킹</button>
+      <button id="btn-mode-track" class="mode-btn btn-secondary">📍 수동</button>
+      <button id="btn-mode-auto"  class="mode-btn btn-auto">🤖 자동</button>
       <button id="btn-mode-none"  class="mode-btn btn-ghost active">✋ 이동</button>
       <button id="btn-undo"       class="mode-btn btn-ghost">↩ 취소</button>
 
@@ -87,6 +129,29 @@
       <span id="mode-hint"></span>
 
       <button id="btn-to-result" class="btn-primary" style="margin-left:auto;">결과 보기 →</button>
+    </div>
+
+    <!-- 자동 추적 패널 -->
+    <div id="auto-panel" class="hidden auto-panel">
+      <div class="auto-panel-row">
+        <span id="auto-seed-status" class="auto-seed-status">물체 중심을 클릭해 시드를 지정하세요</span>
+      </div>
+      <div class="auto-panel-row">
+        <label class="auto-label">프레임 간격
+          <input type="number" id="auto-interval" value="1" min="1" max="30" class="auto-input">
+        </label>
+        <label class="auto-label">최대 점 개수
+          <input type="number" id="auto-maxframes" value="20" min="1" max="60" class="auto-input">
+        </label>
+        <button id="btn-start-auto" class="btn-primary" disabled>▶ 추적 시작</button>
+        <button id="btn-stop-auto"  class="btn-ghost"   disabled>■ 중단</button>
+      </div>
+      <div id="auto-progress-wrap" class="hidden auto-progress-wrap">
+        <div class="auto-progress-track">
+          <div id="auto-progress-bar" class="auto-progress-bar" style="width:0%"></div>
+        </div>
+        <span id="auto-progress-label" class="auto-progress-label">0 / 0 프레임</span>
+      </div>
     </div>
 
     <!-- 캔버스 영역 -->

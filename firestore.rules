@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 허용 도메인 설정: 인증된 사용자는 읽기 가능, 관리자만 쓰기 가능
+    match /config/allowedDomains {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.token.email == 'hckgood@gmail.com';
+    }
+
+    // 학생 세션 데이터: 본인만 읽기/쓰기
+    match /sessions/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+  }
+}

@@ -263,6 +263,201 @@ input[type="file"] {
   width: 140px;
 }
 
+/* ── 접속 차단 화면 ──────────────────────────────── */
+#screen-blocked {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 40px 20px;
+}
+.blocked-card {
+  background: var(--surface);
+  border: 1px solid #b71c1c;
+  border-radius: var(--radius);
+  padding: 40px 32px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.blocked-icon { font-size: 48px; }
+.blocked-card h2 { color: #ef9a9a; }
+.blocked-card p  { color: var(--text-dim); line-height: 1.7; }
+.blocked-guide   { font-size: 14px; background: var(--surface2); border-radius: 8px; padding: 12px; }
+
+/* ── 관리자 화면 ─────────────────────────────────── */
+#screen-admin {
+  padding: 24px 20px;
+  flex: 1;
+}
+.admin-container {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.admin-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.admin-header h2 { font-size: 22px; }
+.admin-email-badge {
+  background: var(--accent);
+  color: #90caf9;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+.admin-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.admin-card h3 { color: #90caf9; }
+.admin-desc { font-size: 14px; color: var(--text-dim); }
+
+.domain-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.domain-at {
+  font-size: 18px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.domain-input-row input[type="text"] {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 15px;
+}
+.domain-error {
+  font-size: 13px;
+  color: #ef9a9a;
+  min-height: 18px;
+}
+
+.domain-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.domain-loading, .domain-empty {
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 8px 0;
+}
+.domain-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.domain-name {
+  font-size: 15px;
+  color: #a5d6a7;
+  font-weight: 600;
+}
+.btn-delete-domain {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: #ef9a9a;
+  border-color: #b71c1c;
+}
+
+/* ── 자동 추적 버튼 ──────────────────────────────── */
+.btn-auto {
+  background: linear-gradient(135deg, #7b1fa2, #1565c0);
+  color: #fff;
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.btn-auto.active {
+  background: linear-gradient(135deg, #ce93d8, #90caf9) !important;
+  color: #111 !important;
+}
+
+/* ── 자동 추적 패널 ──────────────────────────────── */
+.auto-panel {
+  background: #0d1b2a;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.auto-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.auto-seed-status {
+  font-size: 13px;
+  color: #ce93d8;
+}
+.auto-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.auto-input {
+  width: 64px;
+  padding: 5px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+.auto-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.auto-progress-track {
+  flex: 1;
+  height: 8px;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.auto-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #7b1fa2, #1565c0);
+  border-radius: 4px;
+  transition: width 0.2s;
+}
+.auto-progress-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 /* ── 반응형 ─────────────────────────────────────── */
 @media (max-width: 600px) {
   .chart-box { min-width: 100%; }
