@@ -82,7 +82,7 @@
     <div class="upload-card">
       <h3>① 자유낙하 영상</h3>
       <div class="upload-row">
-        <input type="file" id="ff-file" accept="video/mp4,video/quicktime,video/*">
+        <input type="file" id="ff-file" accept="video/mp4,video/quicktime,video/mov,video/*,.mp4,.mov,.m4v">
       </div>
       <div class="fps-row">
         <span>FPS:</span>
@@ -94,7 +94,7 @@
     <div class="upload-card">
       <h3>② 수평투사 영상</h3>
       <div class="upload-row">
-        <input type="file" id="proj-file" accept="video/mp4,video/quicktime,video/*">
+        <input type="file" id="proj-file" accept="video/mp4,video/quicktime,video/mov,video/*,.mp4,.mov,.m4v">
       </div>
       <div class="fps-row">
         <span>FPS:</span>
@@ -126,6 +126,7 @@
       <button id="btn-mode-auto"  class="mode-btn btn-auto">🤖 자동</button>
       <button id="btn-mode-none"  class="mode-btn btn-ghost active">✋ 이동</button>
       <button id="btn-undo"       class="mode-btn btn-ghost">↩ 취소</button>
+      <button id="btn-reset"      class="mode-btn btn-reset">🗑 초기화</button>
 
       <span id="calib-status">보정 미완료</span>
       <span id="mode-hint"></span>

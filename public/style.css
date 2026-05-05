@@ -386,6 +386,17 @@ input[type="file"] {
 }
 
 /* ── 자동 추적 버튼 ──────────────────────────────── */
+.btn-reset {
+  background: transparent;
+  border: 1px solid #b71c1c;
+  color: #ef9a9a;
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.btn-reset:active { background: rgba(183,28,28,0.2); }
+
 .btn-auto {
   background: linear-gradient(135deg, #7b1fa2, #1565c0);
   color: #fff;

@@ -13,16 +13,13 @@ export class GraphRenderer {
   }
 
   // 자유낙하: y 이동거리 vs 시간
-  renderFreeFall(canvasEl, data) {
+  renderFreeFall(canvasEl, data, unit = 'cm') {
     this._destroy('freeFall');
-    const labels = data.map(d => d.tSec.toFixed(3));
-    const yVals = data.map(d => d.relYCm);
-
     this.charts['freeFall'] = new Chart(canvasEl, {
       type: 'scatter',
       data: {
         datasets: [{
-          label: '자유낙하 y(cm)',
+          label: `자유낙하 y(${unit})`,
           data: data.map(d => ({ x: d.tSec, y: d.relYCm })),
           borderColor: '#ff5722',
           backgroundColor: 'rgba(255,87,34,0.7)',
@@ -41,14 +38,13 @@ export class GraphRenderer {
     });
   }
 
-  // 수평투사 x: x 이동거리 vs 시간 (등속)
-  renderProjectileX(canvasEl, data) {
+  renderProjectileX(canvasEl, data, unit = 'cm') {
     this._destroy('projX');
     this.charts['projX'] = new Chart(canvasEl, {
       type: 'scatter',
       data: {
         datasets: [{
-          label: '수평투사 x(cm)',
+          label: `수평투사 x(${unit})`,
           data: data.map(d => ({ x: d.tSec, y: d.relXCm })),
           borderColor: '#29b6f6',
           backgroundColor: 'rgba(41,182,246,0.7)',
@@ -67,15 +63,14 @@ export class GraphRenderer {
     });
   }
 
-  // 수평투사 y: y 이동거리 vs 시간 (자유낙하와 비교)
-  renderProjectileY(canvasEl, freeFallData, projData) {
+  renderProjectileY(canvasEl, freeFallData, projData, unit = 'cm') {
     this._destroy('projY');
     this.charts['projY'] = new Chart(canvasEl, {
       type: 'scatter',
       data: {
         datasets: [
           {
-            label: '수평투사 y(cm)',
+            label: `수평투사 y(${unit})`,
             data: projData.map(d => ({ x: d.tSec, y: d.relYCm })),
             borderColor: '#66bb6a',
             backgroundColor: 'rgba(102,187,106,0.7)',
@@ -84,7 +79,7 @@ export class GraphRenderer {
             borderWidth: 1.5,
           },
           {
-            label: '자유낙하 y(cm)',
+            label: `자유낙하 y(${unit})`,
             data: freeFallData.map(d => ({ x: d.tSec, y: d.relYCm })),
             borderColor: '#ff5722',
             backgroundColor: 'rgba(255,87,34,0.4)',

@@ -1,15 +1,15 @@
-// calibration.js — 두 점 클릭으로 px → cm 보정
+// calibration.js — 두 점 클릭으로 px → cm 보정 (보정 없이도 px 단위로 동작)
 
 export class Calibration {
   constructor() {
-    this.points = [];   // 최대 2개
-    this.scale = null;  // cm / px
+    this.points = [];
+    this.scale  = null;
     this.realLengthCm = null;
   }
 
   reset() {
     this.points = [];
-    this.scale = null;
+    this.scale  = null;
     this.realLengthCm = null;
   }
 
@@ -34,21 +34,24 @@ export class Calibration {
     return true;
   }
 
-  toCm(px) {
-    if (!this.scale) return null;
-    return px * this.scale;
+  // 보정 없으면 px 값 그대로 반환 (단위만 다름)
+  toUnit(px) {
+    if (px === null || px === undefined) return null;
+    return this.scale ? px * this.scale : px;
   }
 
-  get isCalibrated() {
-    return this.scale !== null;
-  }
+  // 하위 호환
+  toCm(px) { return this.toUnit(px); }
+
+  get unit()         { return this.scale ? 'cm' : 'px'; }
+  get isCalibrated() { return this.scale !== null; }
 
   draw(ctx) {
     if (this.points.length === 0) return;
     ctx.save();
     ctx.strokeStyle = '#00e5ff';
-    ctx.fillStyle = '#00e5ff';
-    ctx.lineWidth = 2;
+    ctx.fillStyle   = '#00e5ff';
+    ctx.lineWidth   = 2;
 
     this.points.forEach((p, i) => {
       ctx.beginPath();
