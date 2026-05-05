@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>운동 분석 — 자유낙하 &amp; 수평투사</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- Firebase -->
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── 헤더 ──────────────────────────────────── -->
+  <header>
+    <h1>⚗️ 운동 분석</h1>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span id="user-name"></span>
+      <button id="btn-logout" class="btn-ghost hidden" style="min-height:36px;font-size:13px;padding:0 12px;">로그아웃</button>
+    </div>
+  </header>
+
+  <!-- ── Step 1: 로그인 ─────────────────────────── -->
+  <section id="screen-login">
+    <h2>자유낙하 &amp; 수평투사 분석</h2>
+    <p>구글 계정으로 로그인하여 영상 분석을 시작하세요.</p>
+    <button id="btn-login" class="btn-primary">
+      <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Google로 로그인
+    </button>
+  </section>
+
+  <!-- ── Step 2: 영상 업로드 ───────────────────── -->
+  <section id="screen-upload" class="hidden">
+    <div class="upload-card">
+      <h3>① 자유낙하 영상</h3>
+      <div class="upload-row">
+        <input type="file" id="ff-file" accept="video/mp4,video/quicktime,video/*">
+      </div>
+      <div class="fps-row">
+        <span>FPS:</span>
+        <input type="number" id="ff-fps-input" value="30" min="1" max="240">
+        <span id="ff-fps-status" class="fps-status">영상을 업로드하면 자동 감지</span>
+      </div>
+    </div>
+
+    <div class="upload-card">
+      <h3>② 수평투사 영상</h3>
+      <div class="upload-row">
+        <input type="file" id="proj-file" accept="video/mp4,video/quicktime,video/*">
+      </div>
+      <div class="fps-row">
+        <span>FPS:</span>
+        <input type="number" id="proj-fps-input" value="30" min="1" max="240">
+        <span id="proj-fps-status" class="fps-status">영상을 업로드하면 자동 감지</span>
+      </div>
+    </div>
+
+    <button id="btn-to-track" class="btn-primary" disabled>분석 시작 →</button>
+
+    <!-- 숨겨진 video 엘리먼트 (fps 측정용) -->
+    <video id="ff-video"   style="display:none" playsinline></video>
+    <video id="proj-video" style="display:none" playsinline></video>
+  </section>
+
+  <!-- ── Step 3: 트래킹 ────────────────────────── -->
+  <section id="screen-track" class="hidden">
+
+    <div class="track-toolbar">
+      <!-- 영상 선택 탭 -->
+      <button id="tab-ff"   class="tab-btn active">자유낙하</button>
+      <button id="tab-proj" class="tab-btn">수평투사</button>
+
+      <div style="width:1px;height:30px;background:var(--border);margin:0 4px;"></div>
+
+      <!-- 모드 선택 -->
+      <button id="btn-mode-calib" class="mode-btn btn-secondary">📏 보정</button>
+      <button id="btn-mode-track" class="mode-btn btn-secondary">📍 트래킹</button>
+      <button id="btn-mode-none"  class="mode-btn btn-ghost active">✋ 이동</button>
+      <button id="btn-undo"       class="mode-btn btn-ghost">↩ 취소</button>
+
+      <span id="calib-status">보정 미완료</span>
+      <span id="mode-hint"></span>
+
+      <button id="btn-to-result" class="btn-primary" style="margin-left:auto;">결과 보기 →</button>
+    </div>
+
+    <!-- 캔버스 영역 -->
+    <div class="canvas-wrapper">
+      <canvas id="ff-canvas"></canvas>
+      <canvas id="proj-canvas" class="hidden-canvas"></canvas>
+    </div>
+
+    <!-- 프레임 탐색 -->
+    <div class="frame-nav">
+      <button id="btn-prev" class="btn-ghost">◀</button>
+      <input type="range" id="frame-slider" min="0" max="0" value="0">
+      <button id="btn-next" class="btn-ghost">▶</button>
+      <span id="frame-info">프레임 0 / 0</span>
+    </div>
+
+  </section>
+
+  <!-- ── Step 4: 결과 & 보고서 ─────────────────── -->
+  <section id="screen-result" class="hidden">
+
+    <div class="result-section">
+      <h3>그래프</h3>
+      <div class="chart-row">
+        <div class="chart-box"><canvas id="chart-ff"></canvas></div>
+        <div class="chart-box"><canvas id="chart-proj-x"></canvas></div>
+        <div class="chart-box"><canvas id="chart-proj-y"></canvas></div>
+      </div>
+    </div>
+
+    <div class="result-section">
+      <h3>보고서 다운로드</h3>
+      <div class="report-form">
+        <label>이름 <input type="text" id="student-name" placeholder="홍길동"></label>
+        <label>반   <input type="text" id="student-class" placeholder="1반"></label>
+      </div>
+      <button id="btn-report" class="btn-primary">📄 보고서 저장 (PNG)</button>
+    </div>
+
+    <button id="btn-back-track" class="btn-ghost" onclick="document.getElementById('screen-result').classList.add('hidden');document.getElementById('screen-track').classList.remove('hidden');">← 트래킹으로 돌아가기</button>
+
+  </section>
+
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+/* style.css — 다크 테마, 태블릿 최적화 */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f0f1a;
+  --surface: #1a1a2e;
+  --surface2: #16213e;
+  --accent: #0f3460;
+  --primary: #e94560;
+  --text: #e0e0e0;
+  --text-dim: #9e9e9e;
+  --border: #2a2a3e;
+  --btn-h: 52px;
+  --radius: 10px;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* ── 유틸 ─────────────────────────────────────── */
+.hidden { display: none !important; }
+
+button {
+  min-height: var(--btn-h);
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  transition: opacity 0.15s;
+}
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:active:not(:disabled) { opacity: 0.7; }
+
+.btn-primary   { background: var(--primary); color: #fff; }
+.btn-secondary { background: var(--accent);  color: #fff; }
+.btn-ghost     { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-active, button.active { background: #e94560 !important; color: #fff; }
+
+/* ── 앱 레이아웃 ───────────────────────────────── */
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+header h1 { font-size: 18px; color: var(--primary); }
+#user-name { font-size: 13px; color: var(--text-dim); margin-right: 10px; }
+
+/* ── 로그인 화면 ────────────────────────────────── */
+#screen-login {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 24px;
+  padding: 40px;
+}
+#screen-login h2 { font-size: 22px; }
+#screen-login p  { color: var(--text-dim); text-align: center; max-width: 360px; }
+#btn-login {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  color: #333;
+  font-size: 16px;
+  padding: 0 28px;
+}
+
+/* ── 업로드 화면 ────────────────────────────────── */
+#screen-upload {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.upload-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+.upload-card h3 { margin-bottom: 12px; color: #90caf9; }
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+input[type="file"] {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.fps-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.fps-row input[type="number"] {
+  width: 70px;
+  padding: 6px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+.fps-status { color: #66bb6a; font-size: 13px; }
+
+/* ── 트래킹 화면 ────────────────────────────────── */
+#screen-track {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.track-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tab-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+  background: var(--surface2);
+  color: var(--text-dim);
+  border-radius: 8px;
+}
+.tab-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.mode-btn {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+#mode-hint {
+  font-size: 13px;
+  color: #ffe082;
+  padding: 0 6px;
+}
+#calib-status { font-size: 13px; color: #66bb6a; padding: 0 6px; }
+
+.canvas-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+  position: relative;
+}
+
+.canvas-wrapper canvas {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* 비활성 캔버스 숨김 */
+#ff-canvas.hidden-canvas, #proj-canvas.hidden-canvas { display: none; }
+
+.frame-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.frame-nav button { min-height: 44px; min-width: 44px; padding: 0 12px; }
+#frame-slider {
+  flex: 1;
+  accent-color: var(--primary);
+  height: 6px;
+}
+#frame-info { font-size: 13px; color: var(--text-dim); min-width: 160px; }
+
+/* ── 결과 화면 ──────────────────────────────────── */
+#screen-result {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.result-section {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+.result-section h3 { margin-bottom: 12px; color: #90caf9; }
+
+.chart-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.chart-box {
+  flex: 1;
+  min-width: 260px;
+  height: 240px;
+  position: relative;
+}
+
+.report-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.report-form label { font-size: 14px; color: var(--text-dim); }
+.report-form input[type="text"] {
+  padding: 8px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  width: 140px;
+}
+
+/* ── 반응형 ─────────────────────────────────────── */
+@media (max-width: 600px) {
+  .chart-box { min-width: 100%; }
+  .upload-row { flex-direction: column; align-items: stretch; }
+}
