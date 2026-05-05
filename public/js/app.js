@@ -9,7 +9,6 @@ import { AutoTracker }     from './autotracker.js';
 import { GraphRenderer }   from './graphs.js';
 import { generateReport }  from './report.js';
 
-// ── DOM 참조 ────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
 const screens = {
@@ -22,42 +21,55 @@ const screens = {
 };
 
 let currentUser = null;
-let activeMode  = null;   // 'calibration' | 'tracking' | 'auto-seed'
-let activeVideo = 'ff';   // 'ff' | 'proj'
+let activeMode  = null;   // 'calibration' | 'tracking' | 'auto-box'
+let activeVideo = 'ff';
 
 const ffVideo    = $('ff-video');
 const ffCanvas   = $('ff-canvas');
 const projVideo  = $('proj-video');
 const projCanvas = $('proj-canvas');
 
-const calibration   = new Calibration();
-const ffTracker     = new Tracker(calibration);
-const projTracker   = new Tracker(calibration);
-const ffAutoTracker = new AutoTracker();
+const calibration     = new Calibration();
+const ffTracker       = new Tracker(calibration);
+const projTracker     = new Tracker(calibration);
+const ffAutoTracker   = new AutoTracker();
 const projAutoTracker = new AutoTracker();
-const graphs        = new GraphRenderer();
+const graphs          = new GraphRenderer();
 
-const ffController   = new VideoController(ffVideo, ffCanvas,   (fps, auto) => onFpsDetected('ff',   fps, auto));
+const ffController   = new VideoController(ffVideo,   ffCanvas,   (fps, auto) => onFpsDetected('ff',   fps, auto));
 const projController = new VideoController(projVideo, projCanvas, (fps, auto) => onFpsDetected('proj', fps, auto));
+
+// ── 박스 드래그 상태 ──────────────────────────────────
+let dragState = null; // { startX, startY, endX, endY, active }
 
 // ── 인증 ─────────────────────────────────────────────
 initAuth(
   async user => {
     currentUser = user;
-    $('user-name').textContent = user.displayName;
+    $('user-name').textContent = user.displayName ?? user.email;
     $('btn-logout').classList.remove('hidden');
 
     if (isAdmin(user)) {
       showScreen('admin');
-      await initAdmin(user);
+      try {
+        await initAdmin(user);
+      } catch (e) {
+        console.error('관리자 초기화 오류:', e);
+        $('admin-init-error').textContent = '초기화 오류: ' + e.message;
+      }
       return;
     }
 
-    const { allowed, domain } = await checkDomainAccess(user);
-    if (!allowed) {
-      $('blocked-domain').textContent = domain;
-      showScreen('blocked');
-      return;
+    try {
+      const { allowed, domain } = await checkDomainAccess(user);
+      if (!allowed) {
+        $('blocked-domain').textContent = domain;
+        showScreen('blocked');
+        return;
+      }
+    } catch (e) {
+      console.error('도메인 검증 오류:', e);
+      // 오류 시 일단 통과 (Firestore 미설정 상태 대비)
     }
 
     showScreen('upload');
@@ -74,9 +86,8 @@ $('btn-login').addEventListener('click', login);
 $('btn-logout').addEventListener('click', logout);
 $('btn-blocked-logout').addEventListener('click', logout);
 
-// ── 화면 전환 ─────────────────────────────────────────
 function showScreen(name) {
-  Object.values(screens).forEach(s => s.classList.add('hidden'));
+  Object.values(screens).forEach(s => s?.classList.add('hidden'));
   screens[name]?.classList.remove('hidden');
 }
 
@@ -87,8 +98,7 @@ $('proj-file').addEventListener('change', e => loadVideo(e.target.files[0], 'pro
 async function loadVideo(file, type) {
   if (!file) return;
   $(`${type}-fps-status`).textContent = 'fps 측정 중...';
-  const ctrl = type === 'ff' ? ffController : projController;
-  await ctrl.load(file);
+  await (type === 'ff' ? ffController : projController).load(file);
   updateFrameSlider(type);
   checkUploadReady();
 }
@@ -96,18 +106,11 @@ async function loadVideo(file, type) {
 function onFpsDetected(type, fps, auto) {
   $(`${type}-fps-input`).value = fps;
   $(`${type}-fps-status`).textContent = auto
-    ? `자동 감지: ${fps}fps`
-    : `기본값: ${fps}fps (수동 입력 가능)`;
+    ? `자동 감지: ${fps}fps` : `기본값: ${fps}fps`;
 }
 
-$('ff-fps-input').addEventListener('change', e => {
-  ffController.setFps(Number(e.target.value));
-  updateFrameSlider('ff');
-});
-$('proj-fps-input').addEventListener('change', e => {
-  projController.setFps(Number(e.target.value));
-  updateFrameSlider('proj');
-});
+$('ff-fps-input').addEventListener('change',   e => { ffController.setFps(Number(e.target.value));   updateFrameSlider('ff'); });
+$('proj-fps-input').addEventListener('change', e => { projController.setFps(Number(e.target.value)); updateFrameSlider('proj'); });
 
 function checkUploadReady() {
   $('btn-to-track').disabled = !(ffVideo.readyState >= 1 && projVideo.readyState >= 1);
@@ -115,13 +118,13 @@ function checkUploadReady() {
 
 $('btn-to-track').addEventListener('click', () => showScreen('track'));
 
-// ── 트래킹 화면 ───────────────────────────────────────
-function activeController()  { return activeVideo === 'ff' ? ffController   : projController;   }
-function activeCanvas()      { return activeVideo === 'ff' ? ffCanvas        : projCanvas;        }
-function activeTracker()     { return activeVideo === 'ff' ? ffTracker       : projTracker;       }
-function activeAutoTracker() { return activeVideo === 'ff' ? ffAutoTracker   : projAutoTracker;   }
+// ── 트래킹 화면 헬퍼 ──────────────────────────────────
+const activeController  = () => activeVideo === 'ff' ? ffController   : projController;
+const activeCanvas      = () => activeVideo === 'ff' ? ffCanvas        : projCanvas;
+const activeTracker     = () => activeVideo === 'ff' ? ffTracker       : projTracker;
+const activeAutoTracker = () => activeVideo === 'ff' ? ffAutoTracker   : projAutoTracker;
 
-// 영상 전환 탭
+// 영상 탭 전환
 $('tab-ff').addEventListener('click',   () => switchVideo('ff'));
 $('tab-proj').addEventListener('click', () => switchVideo('proj'));
 
@@ -169,7 +172,7 @@ function updateFrameSlider(type) {
   updateFrameInfo();
 }
 
-// ── 모드 버튼 ─────────────────────────────────────────
+// ── 모드 전환 ─────────────────────────────────────────
 $('btn-mode-calib').addEventListener('click', () => setMode('calibration'));
 $('btn-mode-track').addEventListener('click', () => {
   if (!calibration.isCalibrated) { alert('기준 보정을 먼저 완료해주세요.'); return; }
@@ -177,116 +180,164 @@ $('btn-mode-track').addEventListener('click', () => {
 });
 $('btn-mode-auto').addEventListener('click', () => {
   if (!calibration.isCalibrated) { alert('기준 보정을 먼저 완료해주세요.'); return; }
-  setMode('auto-seed');
+  activeAutoTracker().reset();
+  dragState = null;
+  $('btn-start-auto').disabled = true;
+  $('auto-seed-status').textContent = '추적할 물체를 드래그하여 박스로 선택하세요';
+  $('auto-progress-wrap').classList.add('hidden');
+  $('auto-progress-bar').style.width = '0%';
+  setMode('auto-box');
 });
 $('btn-mode-none').addEventListener('click', () => setMode(null));
 $('btn-undo').addEventListener('click', () => {
-  if (activeMode === 'tracking' || activeMode === 'auto-seed') {
-    activeTracker().removeLast();
-    redraw();
-  } else if (activeMode === 'calibration') {
-    calibration.points.pop();
-    redraw();
-  }
+  if (activeMode === 'tracking') { activeTracker().removeLast(); redraw(); }
+  else if (activeMode === 'calibration') { calibration.points.pop(); redraw(); }
 });
 
 function setMode(mode) {
   activeMode = mode;
-
-  // 버튼 active 상태 동기화
-  const modeMap = { calibration: 'calib', tracking: 'track', 'auto-seed': 'auto' };
+  const modeMap = { calibration: 'calib', tracking: 'track', 'auto-box': 'auto' };
   ['calib','track','auto','none'].forEach(m => {
-    const btn = $(`btn-mode-${m}`);
-    if (btn) btn.classList.toggle('active',
-      mode ? modeMap[mode] === m : m === 'none'
-    );
+    $(`btn-mode-${m}`)?.classList.toggle('active', mode ? modeMap[mode] === m : m === 'none');
   });
+  const canvas = activeCanvas();
+  canvas.style.cursor =
+    mode === 'auto-box'     ? 'crosshair' :
+    mode === 'calibration'  ? 'crosshair' :
+    mode === 'tracking'     ? 'crosshair' : 'default';
 
-  activeCanvas().style.cursor = mode ? 'crosshair' : 'default';
-
-  // 자동 추적 패널 표시/숨김
-  $('auto-panel').classList.toggle('hidden', mode !== 'auto-seed');
-
+  $('auto-panel').classList.toggle('hidden', mode !== 'auto-box');
   $('mode-hint').textContent =
     mode === 'calibration' ? '자(ruler)의 양 끝점 두 곳을 클릭하세요' :
-    mode === 'tracking'    ? '각 프레임에서 물체 중심을 클릭하세요' :
-    mode === 'auto-seed'   ? '추적할 물체의 중심을 클릭하세요 (시드 지정)' : '';
+    mode === 'tracking'    ? '각 프레임에서 물체 중심을 클릭하세요'  : '';
 }
 
-// ── 캔버스 입력 (클릭/터치) ───────────────────────────
+// ── 캔버스 이벤트 (클릭/드래그) ──────────────────────
 [ffCanvas, projCanvas].forEach(canvas => {
-  canvas.addEventListener('click', onCanvasClick);
+  // 마우스
+  canvas.addEventListener('mousedown', onPointerDown);
+  canvas.addEventListener('mousemove', onPointerMove);
+  canvas.addEventListener('mouseup',   onPointerUp);
+
+  // 터치
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    onPointerDown({ currentTarget: canvas, clientX: t.clientX, clientY: t.clientY, type: 'touchstart' });
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    onPointerMove({ currentTarget: canvas, clientX: t.clientX, clientY: t.clientY });
+  }, { passive: false });
   canvas.addEventListener('touchend', e => {
     e.preventDefault();
-    const touch = e.changedTouches[0];
-    const rect  = canvas.getBoundingClientRect();
-    handleInput(canvas,
-      (touch.clientX - rect.left) * (canvas.width  / rect.width),
-      (touch.clientY - rect.top)  * (canvas.height / rect.height)
-    );
+    const t = e.changedTouches[0];
+    onPointerUp({ currentTarget: canvas, clientX: t.clientX, clientY: t.clientY });
   }, { passive: false });
 });
 
-function onCanvasClick(e) {
-  const rect = e.currentTarget.getBoundingClientRect();
-  handleInput(e.currentTarget,
-    (e.clientX - rect.left) * (e.currentTarget.width  / rect.width),
-    (e.clientY - rect.top)  * (e.currentTarget.height / rect.height)
-  );
+function canvasPoint(canvas, clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left)  * (canvas.width  / rect.width),
+    y: (clientY - rect.top)   * (canvas.height / rect.height),
+  };
 }
 
-function handleInput(canvas, x, y) {
-  if (!activeMode) return;
-  const isActive = (activeVideo === 'ff' && canvas === ffCanvas) ||
-                   (activeVideo === 'proj' && canvas === projCanvas);
-  if (!isActive) return;
+function isActiveCanvas(canvas) {
+  return (activeVideo === 'ff' && canvas === ffCanvas) ||
+         (activeVideo === 'proj' && canvas === projCanvas);
+}
 
-  if (activeMode === 'calibration') {
+function onPointerDown(e) {
+  if (!isActiveCanvas(e.currentTarget)) return;
+  const { x, y } = canvasPoint(e.currentTarget, e.clientX, e.clientY);
+
+  if (activeMode === 'auto-box') {
+    dragState = { startX: x, startY: y, endX: x, endY: y, active: true };
+  } else if (activeMode === 'calibration') {
     calibration.addPoint(x, y);
     if (calibration.points.length === 2) {
       const px = calibration.pixelDistance;
-      const cm = prompt(`두 점 사이 픽셀 거리: ${px?.toFixed(1)}px\n실제 길이(cm)를 입력하세요:`);
+      const cm = prompt(`픽셀 거리: ${px?.toFixed(1)}px\n실제 길이(cm)를 입력하세요:`);
       if (cm && !isNaN(cm)) {
         calibration.setRealLength(Number(cm));
         $('calib-status').textContent = `보정 완료: ${calibration.scale?.toFixed(4)} cm/px`;
         setMode(null);
-      } else {
-        calibration.reset();
-      }
+      } else calibration.reset();
     }
     redraw();
-
   } else if (activeMode === 'tracking') {
     const ctrl = activeController();
     activeTracker().addPoint(x, y, ctrl.currentFrame, ctrl.fps);
     redraw();
     stepFrame(1);
-
-  } else if (activeMode === 'auto-seed') {
-    // 시드 지정 → 프리뷰 박스 표시 후 자동 추적 대기
-    const at = activeAutoTracker();
-    at.seed(activeCanvas(), x, y);
-    at.lastPos = { x, y };
-    $('auto-seed-status').textContent = `시드 지정 완료 (${Math.round(x)}, ${Math.round(y)}) — 아래 설정 후 추적 시작`;
-    $('btn-start-auto').disabled = false;
-    redraw();
-    // 시드 위치 미리보기 표시
-    drawSeedPreview(activeCanvas(), x, y);
   }
 }
 
-function drawSeedPreview(canvas, x, y) {
-  const ctx  = canvas.getContext('2d');
-  const half = activeAutoTracker().th;
+function onPointerMove(e) {
+  if (!dragState?.active) return;
+  if (!isActiveCanvas(e.currentTarget)) return;
+  const { x, y } = canvasPoint(e.currentTarget, e.clientX, e.clientY);
+  dragState.endX = x;
+  dragState.endY = y;
+  redraw();
+  drawSelectionBox(activeCanvas());
+}
+
+function onPointerUp(e) {
+  if (!dragState?.active) return;
+  dragState.active = false;
+  const { x, y } = canvasPoint(e.currentTarget, e.clientX, e.clientY);
+  dragState.endX = x;
+  dragState.endY = y;
+
+  const bx = Math.min(dragState.startX, dragState.endX);
+  const by = Math.min(dragState.startY, dragState.endY);
+  const bw = Math.abs(dragState.endX - dragState.startX);
+  const bh = Math.abs(dragState.endY - dragState.startY);
+
+  if (bw < 10 || bh < 10) {
+    $('auto-seed-status').textContent = '박스가 너무 작습니다. 다시 드래그하세요.';
+    dragState = null;
+    return;
+  }
+
+  activeAutoTracker().seedFromBox(activeCanvas(), bx, by, bw, bh);
+  $('auto-seed-status').textContent = `선택 완료 (${Math.round(bw)}×${Math.round(bh)}px) — 설정 확인 후 추적 시작을 누르세요`;
+  $('btn-start-auto').disabled = false;
+  redraw();
+  drawSelectionBox(activeCanvas());
+}
+
+// 선택 박스 오버레이 렌더링
+function drawSelectionBox(canvas) {
+  if (!dragState) return;
+  const ctx = canvas.getContext('2d');
+  const x = Math.min(dragState.startX, dragState.endX);
+  const y = Math.min(dragState.startY, dragState.endY);
+  const w = Math.abs(dragState.endX - dragState.startX);
+  const h = Math.abs(dragState.endY - dragState.startY);
+
   ctx.save();
   ctx.strokeStyle = '#00e5ff';
   ctx.lineWidth   = 2;
-  ctx.setLineDash([4, 4]);
-  ctx.strokeRect(x - half, y - half, half * 2, half * 2);
+  ctx.setLineDash([6, 3]);
+  ctx.strokeRect(x, y, w, h);
   ctx.setLineDash([]);
+
+  // 모서리 핸들
+  const hs = 8;
   ctx.fillStyle = '#00e5ff';
+  [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([px,py]) => {
+    ctx.fillRect(px - hs/2, py - hs/2, hs, hs);
+  });
+
+  // 중심점
   ctx.beginPath();
-  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.arc(x + w/2, y + h/2, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#ff5722';
   ctx.fill();
   ctx.restore();
 }
@@ -295,27 +346,27 @@ function drawSeedPreview(canvas, x, y) {
 $('btn-start-auto').addEventListener('click', runAutoTracking);
 
 async function runAutoTracking() {
-  const at       = activeAutoTracker();
-  const ctrl     = activeController();
-  const tracker  = activeTracker();
+  const at      = activeAutoTracker();
+  const ctrl    = activeController();
+  const tracker = activeTracker();
 
-  if (!at.seeded) { alert('먼저 물체를 클릭해 시드를 지정하세요.'); return; }
+  if (!at.seeded) { alert('먼저 물체를 드래그해서 선택하세요.'); return; }
 
-  const interval  = Math.max(1, parseInt($('auto-interval').value)  || 1);
-  const maxFrames = Math.max(1, parseInt($('auto-maxframes').value) || 20);
+  const interval   = Math.max(1, parseInt($('auto-interval').value)   || 1);
+  const maxPoints  = Math.max(1, parseInt($('auto-maxframes').value)  || 20);
   const startFrame = ctrl.currentFrame;
-  const endFrame   = Math.min(startFrame + interval * maxFrames, ctrl.totalFrames - 1);
+  const endFrame   = Math.min(startFrame + interval * maxPoints, ctrl.totalFrames - 1);
 
-  // UI 잠금
-  $('btn-start-auto').disabled   = true;
-  $('btn-stop-auto').disabled    = false;
+  $('btn-start-auto').disabled  = true;
+  $('btn-stop-auto').disabled   = false;
   $('auto-progress-wrap').classList.remove('hidden');
+
   let stopped = false;
   $('btn-stop-auto').onclick = () => { stopped = true; };
 
   tracker.reset();
   let count = 0;
-  const total = Math.ceil((endFrame - startFrame) / interval);
+  const total = Math.ceil((endFrame - startFrame) / interval) + 1;
 
   for (let f = startFrame; f <= endFrame; f += interval) {
     if (stopped) break;
@@ -325,28 +376,29 @@ async function runAutoTracking() {
 
     const { x, y } = at.findInCanvas(activeCanvas());
     at.lastPos = { x, y };
-    at.updateTemplate(activeCanvas(), x, y); // 적응형 업데이트
+    at.updateTemplate(activeCanvas(), x, y);
 
     tracker.addPoint(x, y, f, ctrl.fps);
     redraw();
-    drawSeedPreview(activeCanvas(), x, y);
+    // 현재 추적 박스 표시
+    if (at.box) {
+      const bx = x - at.thW, by = y - at.thH;
+      dragState = { startX: bx, startY: by, endX: bx + at.thW*2, endY: by + at.thH*2, active: false };
+      drawSelectionBox(activeCanvas());
+    }
 
     count++;
-    const pct = Math.round((count / total) * 100);
-    $('auto-progress-bar').style.width = pct + '%';
-    $('auto-progress-label').textContent = `${count} / ${total} 프레임`;
+    $('auto-progress-bar').style.width = Math.round((count / total) * 100) + '%';
+    $('auto-progress-label').textContent = `${count} / ${total} 프레임 추적 중...`;
     updateFrameInfo();
 
-    // 다음 프레임 처리 전 짧게 yield (UI 갱신)
-    await new Promise(r => setTimeout(r, 0));
+    await new Promise(r => setTimeout(r, 0)); // UI 갱신 yield
   }
 
-  // 완료
-  $('btn-start-auto').disabled  = false;
-  $('btn-stop-auto').disabled   = true;
-  $('auto-seed-status').textContent = stopped
-    ? `추적 중단 — ${count}개 점 기록`
-    : `추적 완료 — ${count}개 점 기록`;
+  $('btn-start-auto').disabled = false;
+  $('btn-stop-auto').disabled  = true;
+  $('auto-progress-label').textContent = stopped
+    ? `중단 — ${count}개 점 기록됨` : `완료 — ${count}개 점 기록됨`;
   setMode(null);
 }
 
@@ -370,10 +422,8 @@ $('btn-to-result').addEventListener('click', () => {
 function renderAllGraphs() {
   const ffRel   = ffTracker.getRelativeData();
   const projRel = projTracker.getRelativeData();
-  if (ffRel.length > 0)
-    graphs.renderFreeFall($('chart-ff'), ffRel);
-  if (projRel.length > 0)
-    graphs.renderProjectileX($('chart-proj-x'), projRel);
+  if (ffRel.length > 0)   graphs.renderFreeFall($('chart-ff'), ffRel);
+  if (projRel.length > 0) graphs.renderProjectileX($('chart-proj-x'), projRel);
   if (ffRel.length > 0 && projRel.length > 0)
     graphs.renderProjectileY($('chart-proj-y'), ffRel, projRel);
 }
@@ -388,10 +438,6 @@ $('btn-report').addEventListener('click', async () => {
     ffData:   ffTracker.getRelativeData(),
     projData: projTracker.getRelativeData(),
     calibration,
-    chartCanvases: {
-      ffChart:    $('chart-ff'),
-      projXChart: $('chart-proj-x'),
-      projYChart: $('chart-proj-y'),
-    }
+    chartCanvases: { ffChart: $('chart-ff'), projXChart: $('chart-proj-x'), projYChart: $('chart-proj-y') }
   });
 });

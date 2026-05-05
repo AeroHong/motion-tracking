@@ -16,7 +16,7 @@ const provider = new GoogleAuthProvider();
 export { auth, db, ADMIN_EMAIL };
 
 export function isAdmin(user) {
-  return user?.email === ADMIN_EMAIL;
+  return user?.email?.toLowerCase().trim() === ADMIN_EMAIL;
 }
 
 // 이메일에서 도메인 추출
