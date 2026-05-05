@@ -41,8 +41,10 @@ const graphs          = new GraphRenderer();
 const ffController   = new VideoController(ffVideo,   ffCanvas,   (fps, auto) => onFpsDetected('ff',   fps, auto));
 const projController = new VideoController(projVideo, projCanvas, (fps, auto) => onFpsDetected('proj', fps, auto));
 
-let dragState    = null;  // 박스 선택 드래그
-let dragPoint    = null;  // 포인트 이동 드래그 { index }
+let dragState        = null;  // 박스 선택 드래그
+let dragPoint        = null;  // 포인트 이동 드래그 { index }
+let potentialDrag    = null;  // 탭 vs 드래그 구분 { index, startX, startY }
+let selectedPointIdx = -1;    // 선택된 점 인덱스 (-1이면 없음)
 
 // ── 인증 ─────────────────────────────────────────────
 initAuth(
@@ -224,8 +226,14 @@ $('btn-mode-auto').addEventListener('click', () => {
 $('btn-mode-none').addEventListener('click', () => setMode(null));
 
 $('btn-undo').addEventListener('click', () => {
-  if (activeMode === 'calibration') calibration.points.pop();
-  else activeTracker().removeLast();
+  if (activeMode === 'calibration') {
+    calibration.points.pop();
+  } else if (selectedPointIdx !== -1) {
+    activeTracker().removeAt(selectedPointIdx);
+    selectedPointIdx = -1;
+  } else {
+    activeTracker().removeLast();
+  }
   redraw();
 });
 
@@ -240,6 +248,7 @@ $('btn-reset').addEventListener('click', () => {
 
 function setMode(mode) {
   activeMode = mode;
+  selectedPointIdx = -1;
   const modeMap = { calibration: 'calib', tracking: 'track', 'auto-box': 'auto' };
   ['calib','track','auto','none'].forEach(m => {
     $(`btn-mode-${m}`)?.classList.toggle('active', mode ? modeMap[mode] === m : m === 'none');
@@ -274,7 +283,10 @@ function updateCalibStatus() {
   canvas.addEventListener('mousedown',  onPointerDown);
   canvas.addEventListener('mousemove',  onPointerMove);
   canvas.addEventListener('mouseup',    onPointerUp);
-  canvas.addEventListener('mouseleave', e => { if (dragPoint) { dragPoint = null; activeCanvas().style.cursor = 'grab'; } });
+  canvas.addEventListener('mouseleave', () => {
+    potentialDrag = null;
+    if (dragPoint) { dragPoint = null; activeCanvas().style.cursor = 'grab'; }
+  });
 
   canvas.addEventListener('touchstart', e => {
     e.preventDefault();
@@ -310,9 +322,15 @@ function onPointerDown(e) {
   const { x, y } = canvasPoint(e.currentTarget, e.clientX, e.clientY);
 
   if (activeMode === null) {
-    // 이동 모드: 기존 포인트 드래그
+    // 이동 모드: 탭 → 선택/해제, 드래그 → 이동
     const idx = activeTracker().findPointNear(x, y);
-    if (idx !== -1) { dragPoint = { index: idx }; activeCanvas().style.cursor = 'grabbing'; }
+    if (idx !== -1) {
+      potentialDrag = { index: idx, startX: x, startY: y };
+    } else {
+      // 빈 곳 탭 → 선택 해제
+      selectedPointIdx = -1;
+      redraw();
+    }
 
   } else if (activeMode === 'auto-box') {
     dragState = { startX: x, startY: y, endX: x, endY: y, active: true };
@@ -342,6 +360,16 @@ function onPointerMove(e) {
   if (!isActiveCanvas(e.currentTarget)) return;
   const { x, y } = canvasPoint(e.currentTarget, e.clientX, e.clientY);
 
+  // potentialDrag → 5px 이상 이동하면 실제 드래그로 전환
+  if (potentialDrag) {
+    const dx = x - potentialDrag.startX, dy = y - potentialDrag.startY;
+    if (Math.sqrt(dx * dx + dy * dy) > 5) {
+      dragPoint = { index: potentialDrag.index };
+      potentialDrag = null;
+      activeCanvas().style.cursor = 'grabbing';
+    }
+  }
+
   if (dragPoint) {
     activeTracker().updatePoint(dragPoint.index, x, y);
     redraw(); return;
@@ -353,6 +381,12 @@ function onPointerMove(e) {
 }
 
 function onPointerUp(e) {
+  if (potentialDrag) {
+    // 드래그 없이 탭 → 점 선택 / 선택 해제 토글
+    selectedPointIdx = (selectedPointIdx === potentialDrag.index) ? -1 : potentialDrag.index;
+    potentialDrag = null;
+    redraw(); return;
+  }
   if (dragPoint) {
     dragPoint = null;
     activeCanvas().style.cursor = 'grab'; return;
@@ -419,7 +453,7 @@ async function runAutoTracking() {
   $('auto-progress-wrap').classList.remove('hidden');
   $('auto-conf-bar-wrap').classList.remove('hidden');
 
-  let stopped = false, count = 0, lowConfCount = 0;
+  let stopped = false, count = 0;
   $('btn-stop-auto').onclick = () => { stopped = true; };
   tracker.reset();
 
@@ -432,31 +466,33 @@ async function runAutoTracking() {
     $('frame-slider').value = ctrl.currentFrame;
 
     const result = at.findInCanvas(activeCanvas(), interval);
-    const { x, y, confidence, lowConfidence } = result;
+    const { x, y, confidence, lowConfidence, outOfBounds } = result;
+
+    // 화면 밖 이탈 또는 저신뢰도 → 즉시 중단
+    if (outOfBounds) {
+      $('auto-seed-status').textContent = '⚠️ 물체가 화면 밖으로 벗어남 — 추적 중단';
+      break;
+    }
+    if (lowConfidence) {
+      $('auto-seed-status').textContent = '⚠️ 신뢰도 낮음 — 추적 중단 (박스 재선택 후 다시 시도)';
+      break;
+    }
 
     at.updateVelocity(x, y);
     at.lastPos = { x, y };
     at.updateTemplate(activeCanvas(), x, y, confidence);
-    tracker.addPoint(x, y, f, ctrl.fps, lowConfidence);
+    tracker.addPoint(x, y, f, ctrl.fps, false);
     redraw();
 
     dragState = { startX: x - at.thW, startY: y - at.thH,
-                  endX:   x + at.thW, endY:   y + at.thH, active: false, lowConf: lowConfidence };
+                  endX:   x + at.thW, endY:   y + at.thH, active: false, lowConf: false };
     drawSelectionBox(activeCanvas());
 
     const pct = Math.round(confidence * 100);
     $('auto-conf-bar').style.width      = pct + '%';
     $('auto-conf-bar').style.background =
-      confidence > 0.6 ? '#66bb6a' : confidence > 0.3 ? '#ffa726' : '#ef5350';
-    $('auto-conf-label').textContent    = `신뢰도 ${pct}%${lowConfidence ? ' ⚠️' : ''}`;
-
-    if (lowConfidence) lowConfCount++;
-    else lowConfCount = 0;
-
-    // 연속 저신뢰도 경고 (중단 안 함 — 사용자가 직접 판단)
-    if (lowConfCount >= 4) {
-      $('auto-seed-status').textContent = `⚠️ 신뢰도 낮음 — 계속 추적 중 (취소하려면 ■ 중단)`;
-    }
+      confidence > 0.7 ? '#66bb6a' : confidence > 0.5 ? '#ffa726' : '#ef5350';
+    $('auto-conf-label').textContent    = `신뢰도 ${pct}%`;
 
     count++;
     $('auto-progress-bar').style.width   = Math.round((count / total) * 100) + '%';
@@ -468,10 +504,9 @@ async function runAutoTracking() {
 
   $('btn-start-auto').disabled = false;
   $('btn-stop-auto').disabled  = true;
-  const warnCount = activeTracker().points.filter(p => p.lowConf).length;
-  $('auto-seed-status').textContent = stopped
-    ? `중단 — ${count}개 점 기록됨`
-    : `완료 — ${count}개 점 기록됨${warnCount > 0 ? ` (⚠️ 저신뢰도 ${warnCount}개)` : ''}`;
+  if (!$('auto-seed-status').textContent.startsWith('⚠️')) {
+    $('auto-seed-status').textContent = `완료 — ${count}개 점 기록됨`;
+  }
   setMode(null);
 }
 
@@ -482,7 +517,7 @@ function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctrl.drawCurrentFrame();
   calibration.draw(ctx);
-  activeTracker().draw(ctx);
+  activeTracker().draw(ctx, activeVideo, selectedPointIdx);
 }
 
 // ── 결과 화면 ─────────────────────────────────────────

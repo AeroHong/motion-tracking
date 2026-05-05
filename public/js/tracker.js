@@ -1,4 +1,4 @@
-// tracker.js — 프레임별 물체 위치 트래킹 (드래그 이동 + 십자선 지원)
+// tracker.js — 프레임별 물체 위치 트래킹
 
 export class Tracker {
   constructor(calibration) {
@@ -11,13 +11,18 @@ export class Tracker {
   addPoint(xPx, yPx, frame, fps, lowConf = false) {
     const tSec = frame / fps;
     const xUnit = this.calibration.toUnit(xPx);
-    const yCm   = this.calibration.toUnit(yPx); // variable명 유지 (하위호환)
+    const yCm   = this.calibration.toUnit(yPx);
     this.points.push({ frame, tSec, xPx, yPx, xCm: xUnit, yCm, lowConf });
   }
 
   removeLast() { this.points.pop(); }
 
-  // 드래그로 포인트 이동 지원
+  removeAt(index) {
+    if (index >= 0 && index < this.points.length) {
+      this.points.splice(index, 1);
+    }
+  }
+
   findPointNear(x, y, radius = 18) {
     for (let i = this.points.length - 1; i >= 0; i--) {
       const p = this.points[i];
@@ -36,7 +41,6 @@ export class Tracker {
     p.yCm = this.calibration.toUnit(yPx);
   }
 
-  // 원점(첫 점) 기준 상대 좌표
   getRelativeData() {
     if (this.points.length === 0) return [];
     const origin = this.points[0];
@@ -47,27 +51,48 @@ export class Tracker {
     }));
   }
 
-  draw(ctx) {
+  // type: 'ff' | 'proj'
+  // selectedIdx: 선택된 점 인덱스 (-1이면 없음)
+  draw(ctx, type = 'ff', selectedIdx = -1) {
     if (this.points.length === 0) return;
     ctx.save();
 
     const W = ctx.canvas.width;
     const H = ctx.canvas.height;
-    const origin = this.points[0];
 
-    // ── 첫 번째 점 기준 십자선 ────────────────────────
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    // ── 첫 번째 점 기준 원점 십자선 (흰색 반투명) ────────
+    const origin = this.points[0];
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth   = 1;
     ctx.setLineDash([6, 5]);
-    ctx.beginPath(); ctx.moveTo(0, origin.yPx);     ctx.lineTo(W, origin.yPx);     ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(origin.xPx, 0);     ctx.lineTo(origin.xPx, H);     ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, origin.yPx); ctx.lineTo(W, origin.yPx); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(origin.xPx, 0); ctx.lineTo(origin.xPx, H); ctx.stroke();
     ctx.setLineDash([]);
 
+    // ── 각 점의 가이드 선 ─────────────────────────────────
+    this.points.forEach(p => {
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+
+      if (type === 'ff') {
+        // 자유낙하: 가로 점선만 (하늘색)
+        ctx.strokeStyle = 'rgba(100, 210, 255, 0.45)';
+        ctx.beginPath(); ctx.moveTo(0, p.yPx); ctx.lineTo(W, p.yPx); ctx.stroke();
+      } else {
+        // 수평투사: 가로(하늘색) + 세로(연두색)
+        ctx.strokeStyle = 'rgba(100, 210, 255, 0.45)';
+        ctx.beginPath(); ctx.moveTo(0, p.yPx); ctx.lineTo(W, p.yPx); ctx.stroke();
+        ctx.strokeStyle = 'rgba(100, 255, 160, 0.45)';
+        ctx.beginPath(); ctx.moveTo(p.xPx, 0); ctx.lineTo(p.xPx, H); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    });
+
+    // ── 연결선 + 거리 표시 ────────────────────────────────
     const nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩',
                   '⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
 
     this.points.forEach((p, i) => {
-      // 연결선
       if (i > 0) {
         const prev = this.points[i - 1];
         ctx.beginPath();
@@ -77,7 +102,6 @@ export class Tracker {
         ctx.lineWidth   = 1.5;
         ctx.stroke();
 
-        // 간격 거리 표시
         if (p.xCm !== null && prev.xCm !== null) {
           const dx   = p.xCm - prev.xCm;
           const dy   = p.yCm - prev.yCm;
@@ -89,21 +113,30 @@ export class Tracker {
         }
       }
 
-      // 점
+      // 점 (선택된 점은 더 크게, 노란 테두리)
+      const isSelected = i === selectedIdx;
+      const radius = isSelected ? 10 : 7;
       ctx.beginPath();
-      ctx.arc(p.xPx, p.yPx, 7, 0, Math.PI * 2);
+      ctx.arc(p.xPx, p.yPx, radius, 0, Math.PI * 2);
       ctx.fillStyle   = p.lowConf ? 'rgba(255,152,0,0.85)' : 'rgba(255,87,34,0.85)';
       ctx.fill();
-      ctx.strokeStyle = p.lowConf ? '#fff176' : '#fff';
-      ctx.lineWidth   = p.lowConf ? 2 : 1.5;
+      ctx.strokeStyle = isSelected ? '#ffeb3b' : (p.lowConf ? '#fff176' : '#fff');
+      ctx.lineWidth   = isSelected ? 3 : (p.lowConf ? 2 : 1.5);
       ctx.stroke();
 
       // 번호
       ctx.fillStyle = '#fff';
       ctx.font      = 'bold 13px sans-serif';
-      ctx.fillText(nums[i] ?? `${i + 1}`, p.xPx + 9, p.yPx - 6);
+      ctx.fillText(nums[i] ?? `${i + 1}`, p.xPx + 11, p.yPx - 7);
 
-      if (p.lowConf) {
+      // 선택된 점: ✕ 삭제 표시
+      if (isSelected) {
+        ctx.fillStyle = '#ffeb3b';
+        ctx.font      = 'bold 14px sans-serif';
+        ctx.fillText('✕', p.xPx - 19, p.yPx - 7);
+      }
+
+      if (p.lowConf && !isSelected) {
         ctx.fillStyle = '#fff176';
         ctx.font      = '11px sans-serif';
         ctx.fillText('⚠', p.xPx - 14, p.yPx - 6);
