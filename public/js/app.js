@@ -8,7 +8,7 @@ import { Tracker }            from './tracker.js';
 import { AutoTracker }        from './autotracker.js';
 import { GraphRenderer }      from './graphs.js';
 import { generateReport }     from './report.js';
-import { detectObjects, drawDetections } from './ml-detector.js';
+
 
 const $ = id => document.getElementById(id);
 
@@ -43,7 +43,6 @@ const projController = new VideoController(projVideo, projCanvas, (fps, auto) =>
 
 let dragState    = null;  // 박스 선택 드래그
 let dragPoint    = null;  // 포인트 이동 드래그 { index }
-let mlDetections = [];    // COCO-SSD 감지 결과
 
 // ── 인증 ─────────────────────────────────────────────
 initAuth(
@@ -214,9 +213,9 @@ $('btn-mode-calib').addEventListener('click', () => setMode('calibration'));
 $('btn-mode-track').addEventListener('click', () => setMode('tracking'));
 $('btn-mode-auto').addEventListener('click', () => {
   activeAutoTracker().reset();
-  dragState = null; mlDetections = [];
+  dragState = null;
   $('btn-start-auto').disabled = true;
-  $('auto-seed-status').textContent = '드래그로 박스 선택 또는 ML 감지 버튼 사용';
+  $('auto-seed-status').textContent = '추적할 물체를 박스로 드래그하여 선택하세요';
   $('auto-progress-wrap').classList.add('hidden');
   $('auto-conf-bar-wrap').classList.add('hidden');
   $('auto-progress-bar').style.width = '0%';
@@ -234,28 +233,28 @@ $('btn-reset').addEventListener('click', () => {
   if (!confirm('현재 영상의 모든 추적 포인트를 초기화할까요?')) return;
   activeTracker().reset();
   activeAutoTracker().reset();
-  dragState = null; dragPoint = null; mlDetections = [];
+  dragState = null; dragPoint = null;
   setMode(null);
   redraw();
 });
 
 function setMode(mode) {
   activeMode = mode;
-  const modeMap = { calibration: 'calib', tracking: 'track', 'auto-box': 'auto', 'ml-select': 'auto' };
+  const modeMap = { calibration: 'calib', tracking: 'track', 'auto-box': 'auto' };
   ['calib','track','auto','none'].forEach(m => {
     $(`btn-mode-${m}`)?.classList.toggle('active', mode ? modeMap[mode] === m : m === 'none');
   });
 
-  const isCross = ['tracking','calibration','auto-box','ml-select'].includes(mode);
+  const isCross = ['tracking','calibration','auto-box'].includes(mode);
   [ffCanvas, projCanvas].forEach(c => { c.style.cursor = isCross ? 'crosshair' : 'grab'; });
 
-  $('auto-panel').classList.toggle('hidden', !['auto-box','ml-select'].includes(mode));
+  $('auto-panel').classList.toggle('hidden', mode !== 'auto-box');
 
   updateCalibStatus();
   $('mode-hint').textContent =
     mode === 'calibration' ? '자(ruler)의 양 끝점 두 곳을 클릭하세요' :
     mode === 'tracking'    ? '물체 중심을 클릭하세요 (← → 키로 프레임 이동)' :
-    mode === 'ml-select'   ? '감지된 박스를 탭하여 선택하세요' :
+    mode === 'auto-box'    ? '추적할 물체를 박스로 드래그하세요' :
     mode === null          ? '점을 드래그하여 위치 수정 가능' : '';
 }
 
@@ -314,26 +313,6 @@ function onPointerDown(e) {
     // 이동 모드: 기존 포인트 드래그
     const idx = activeTracker().findPointNear(x, y);
     if (idx !== -1) { dragPoint = { index: idx }; activeCanvas().style.cursor = 'grabbing'; }
-
-  } else if (activeMode === 'ml-select') {
-    // ML 감지 박스 선택
-    const hit = mlDetections.find(d => {
-      const [bx, by, bw, bh] = d.bbox;
-      return x >= bx && x <= bx + bw && y >= by && y <= by + bh;
-    });
-    if (hit) {
-      const [bx, by, bw, bh] = hit.bbox;
-      // ML 박스는 배경 포함이 많아 중심 65%만 템플릿으로 사용
-      activeAutoTracker().seedFromBox(activeCanvas(), bx, by, bw, bh, 0.65);
-      $('auto-seed-status').textContent =
-        `"${hit.class}" 감지 확정 (${Math.round(hit.score * 100)}%) — 추적 시작을 누르세요`;
-      $('btn-start-auto').disabled = false;
-      mlDetections = [];
-      dragState = { startX: bx, startY: by, endX: bx + bw, endY: by + bh, active: false };
-      setMode('auto-box');
-      redraw();
-      drawSelectionBox(activeCanvas());
-    }
 
   } else if (activeMode === 'auto-box') {
     dragState = { startX: x, startY: y, endX: x, endY: y, active: true };
@@ -423,35 +402,6 @@ function drawSelectionBox(canvas) {
   ctx.restore();
 }
 
-// ── ML 물체 감지 ──────────────────────────────────────
-$('btn-ml-detect').addEventListener('click', async () => {
-  $('btn-ml-detect').disabled = true;
-  $('auto-seed-status').textContent = 'ML 감지 시작...';
-
-  try {
-    const predictions = await detectObjects(
-      activeCanvas(),
-      msg => { $('auto-seed-status').textContent = msg; }
-    );
-
-    if (predictions.length === 0) {
-      $('auto-seed-status').textContent = '물체를 감지하지 못했습니다. 박스를 직접 드래그하세요.';
-    } else {
-      mlDetections = predictions;
-      $('auto-seed-status').textContent =
-        `${predictions.length}개 물체 감지됨 — 추적할 물체를 탭하여 선택하세요`;
-      setMode('ml-select');
-      redraw();
-      drawDetections(activeCanvas().getContext('2d'), mlDetections);
-    }
-  } catch (err) {
-    $('auto-seed-status').textContent = 'ML 오류: ' + err.message;
-    console.error(err);
-  } finally {
-    $('btn-ml-detect').disabled = false;
-  }
-});
-
 // ── 자동 추적 실행 ────────────────────────────────────
 $('btn-start-auto').addEventListener('click', runAutoTracking);
 
@@ -513,7 +463,7 @@ async function runAutoTracking() {
     $('auto-progress-label').textContent = `${count} / ${total}`;
     updateFrameInfo();
 
-    await new Promise(r => setTimeout(r, 0));
+    await new Promise(r => setTimeout(r, 500));
   }
 
   $('btn-start-auto').disabled = false;
@@ -533,8 +483,6 @@ function redraw() {
   ctrl.drawCurrentFrame();
   calibration.draw(ctx);
   activeTracker().draw(ctx);
-  if (activeMode === 'ml-select' && mlDetections.length > 0)
-    drawDetections(ctx, mlDetections);
 }
 
 // ── 결과 화면 ─────────────────────────────────────────
