@@ -542,7 +542,7 @@ function renderAllGraphs() {
 
 $('btn-report').addEventListener('click', async () => {
   const name = $('student-name').value.trim() || '이름없음';
-  const cls  = $('student-class').value.trim() || '-';
+  const cls  = $('student-class').value.trim() || '00000';
   const ffData   = ffTracker.getRelativeData();
   const projData = projTracker.getRelativeData();
 

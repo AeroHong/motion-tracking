@@ -40,7 +40,7 @@ export async function renderReportBlob({
   // ── 헤더 ──────────────────────────────────────────
   ctx.fillStyle = '#e0e0e0';
   ctx.font = 'bold 22px sans-serif';
-  ctx.fillText(`이름: ${studentName}　반: ${className}　날짜: ${date}`, PAD, 40);
+  ctx.fillText(`이름: ${studentName}　학번: ${className}　날짜: ${date}`, PAD, 40);
 
   ctx.strokeStyle = '#555';
   ctx.lineWidth = 1;
