@@ -149,10 +149,18 @@
         <button id="btn-stop-auto"  class="btn-ghost"   disabled>■ 중단</button>
       </div>
       <div id="auto-progress-wrap" class="hidden auto-progress-wrap">
+        <span class="auto-progress-title">진행</span>
         <div class="auto-progress-track">
           <div id="auto-progress-bar" class="auto-progress-bar" style="width:0%"></div>
         </div>
-        <span id="auto-progress-label" class="auto-progress-label">0 / 0 프레임</span>
+        <span id="auto-progress-label" class="auto-progress-label">0 / 0</span>
+      </div>
+      <div id="auto-conf-bar-wrap" class="hidden auto-progress-wrap">
+        <span class="auto-progress-title">신뢰도</span>
+        <div class="auto-progress-track">
+          <div id="auto-conf-bar" class="auto-progress-bar" style="width:100%;background:#66bb6a"></div>
+        </div>
+        <span id="auto-conf-label" class="auto-progress-label">-</span>
       </div>
     </div>
 

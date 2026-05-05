@@ -46,8 +46,11 @@ let dragState = null; // { startX, startY, endX, endY, active }
 initAuth(
   async user => {
     currentUser = user;
-    $('user-name').textContent = user.displayName ?? user.email;
+    $('user-name').textContent = user.email; // 디버그: 실제 이메일 표시
     $('btn-logout').classList.remove('hidden');
+
+    console.log('[AUTH] 로그인 이메일:', user.email);
+    console.log('[AUTH] isAdmin 결과:', isAdmin(user));
 
     if (isAdmin(user)) {
       showScreen('admin');
@@ -320,16 +323,19 @@ function drawSelectionBox(canvas) {
   const w = Math.abs(dragState.endX - dragState.startX);
   const h = Math.abs(dragState.endY - dragState.startY);
 
+  // 신뢰도에 따라 박스 색상 변경
+  const color = dragState.lowConf ? '#ffa726' : '#00e5ff';
+
   ctx.save();
-  ctx.strokeStyle = '#00e5ff';
+  ctx.strokeStyle = color;
   ctx.lineWidth   = 2;
-  ctx.setLineDash([6, 3]);
+  ctx.setLineDash(dragState.active ? [6, 3] : []);
   ctx.strokeRect(x, y, w, h);
   ctx.setLineDash([]);
 
   // 모서리 핸들
   const hs = 8;
-  ctx.fillStyle = '#00e5ff';
+  ctx.fillStyle = color;
   [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([px,py]) => {
     ctx.fillRect(px - hs/2, py - hs/2, hs, hs);
   });
@@ -337,7 +343,7 @@ function drawSelectionBox(canvas) {
   // 중심점
   ctx.beginPath();
   ctx.arc(x + w/2, y + h/2, 4, 0, Math.PI * 2);
-  ctx.fillStyle = '#ff5722';
+  ctx.fillStyle = dragState.lowConf ? '#ffa726' : '#ff5722';
   ctx.fill();
   ctx.restore();
 }
@@ -352,20 +358,22 @@ async function runAutoTracking() {
 
   if (!at.seeded) { alert('먼저 물체를 드래그해서 선택하세요.'); return; }
 
-  const interval   = Math.max(1, parseInt($('auto-interval').value)   || 1);
-  const maxPoints  = Math.max(1, parseInt($('auto-maxframes').value)  || 20);
+  const interval   = Math.max(1, parseInt($('auto-interval').value)  || 1);
+  const maxPoints  = Math.max(1, parseInt($('auto-maxframes').value) || 20);
   const startFrame = ctrl.currentFrame;
   const endFrame   = Math.min(startFrame + interval * maxPoints, ctrl.totalFrames - 1);
 
-  $('btn-start-auto').disabled  = true;
-  $('btn-stop-auto').disabled   = false;
+  $('btn-start-auto').disabled = true;
+  $('btn-stop-auto').disabled  = false;
   $('auto-progress-wrap').classList.remove('hidden');
+  $('auto-conf-bar-wrap').classList.remove('hidden');
 
   let stopped = false;
   $('btn-stop-auto').onclick = () => { stopped = true; };
 
   tracker.reset();
   let count = 0;
+  let lowConfCount = 0;
   const total = Math.ceil((endFrame - startFrame) / interval) + 1;
 
   for (let f = startFrame; f <= endFrame; f += interval) {
@@ -374,31 +382,60 @@ async function runAutoTracking() {
     await ctrl.seekToFrame(f);
     $('frame-slider').value = ctrl.currentFrame;
 
-    const { x, y } = at.findInCanvas(activeCanvas());
-    at.lastPos = { x, y };
-    at.updateTemplate(activeCanvas(), x, y);
+    const result = at.findInCanvas(activeCanvas(), interval);
+    const { x, y, confidence, lowConfidence } = result;
 
-    tracker.addPoint(x, y, f, ctrl.fps);
+    // 속도 업데이트 (다음 프레임 예측에 활용)
+    at.updateVelocity(x, y);
+    at.lastPos = { x, y };
+
+    // 신뢰도 높을 때만 템플릿 업데이트
+    at.updateTemplate(activeCanvas(), x, y, confidence);
+
+    // 포인트 기록 (저신뢰도도 기록하되 표시로 구분)
+    tracker.addPoint(x, y, f, ctrl.fps, lowConfidence);
+
     redraw();
-    // 현재 추적 박스 표시
-    if (at.box) {
-      const bx = x - at.thW, by = y - at.thH;
-      dragState = { startX: bx, startY: by, endX: bx + at.thW*2, endY: by + at.thH*2, active: false };
-      drawSelectionBox(activeCanvas());
-    }
+
+    // 추적 박스 표시 (신뢰도에 따라 색상 변경)
+    dragState = {
+      startX: x - at.thW, startY: y - at.thH,
+      endX:   x + at.thW, endY:   y + at.thH,
+      active: false, lowConf: lowConfidence,
+    };
+    drawSelectionBox(activeCanvas());
+
+    // 신뢰도 바 업데이트
+    const confPct = Math.round(confidence * 100);
+    $('auto-conf-bar').style.width = confPct + '%';
+    $('auto-conf-bar').style.background =
+      confidence > 0.6 ? '#66bb6a' : confidence > 0.3 ? '#ffa726' : '#ef5350';
+    $('auto-conf-label').textContent = `신뢰도 ${confPct}%${lowConfidence ? ' ⚠️' : ''}`;
+
+    if (lowConfidence) lowConfCount++;
 
     count++;
     $('auto-progress-bar').style.width = Math.round((count / total) * 100) + '%';
-    $('auto-progress-label').textContent = `${count} / ${total} 프레임 추적 중...`;
+    $('auto-progress-label').textContent = `${count} / ${total}프레임`;
     updateFrameInfo();
 
-    await new Promise(r => setTimeout(r, 0)); // UI 갱신 yield
+    // 연속 저신뢰도 3회 → 자동 중단
+    if (lowConfCount >= 3) {
+      stopped = true;
+      $('auto-seed-status').textContent = '⚠️ 물체를 잃었습니다. 박스를 다시 설정하고 이 위치부터 재시작하세요.';
+      break;
+    }
+    if (!lowConfidence) lowConfCount = 0; // 정상이면 카운터 리셋
+
+    await new Promise(r => setTimeout(r, 0));
   }
 
   $('btn-start-auto').disabled = false;
   $('btn-stop-auto').disabled  = true;
-  $('auto-progress-label').textContent = stopped
-    ? `중단 — ${count}개 점 기록됨` : `완료 — ${count}개 점 기록됨`;
+  if (!stopped || lowConfCount < 3) {
+    $('auto-seed-status').textContent = `완료 — ${count}개 점 기록됨`;
+    $('auto-progress-label').textContent = `완료 (${count}개 점)`;
+  }
   setMode(null);
 }
 

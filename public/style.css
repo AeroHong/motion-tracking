@@ -452,10 +452,17 @@ input[type="file"] {
   border-radius: 4px;
   transition: width 0.2s;
 }
+.auto-progress-title {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  min-width: 36px;
+}
 .auto-progress-label {
   font-size: 12px;
   color: var(--text-dim);
   white-space: nowrap;
+  min-width: 80px;
 }
 
 /* ── 반응형 ─────────────────────────────────────── */

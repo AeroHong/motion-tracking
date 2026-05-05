@@ -10,11 +10,11 @@ export class Tracker {
     this.points = [];
   }
 
-  addPoint(xPx, yPx, frame, fps) {
+  addPoint(xPx, yPx, frame, fps, lowConf = false) {
     const tSec = frame / fps;
     const xCm = this.calibration.toCm(xPx);
     const yCm = this.calibration.toCm(yPx);
-    this.points.push({ frame, tSec, xPx, yPx, xCm, yCm });
+    this.points.push({ frame, tSec, xPx, yPx, xCm, yCm, lowConf });
   }
 
   removeLast() {
@@ -40,19 +40,24 @@ export class Tracker {
                            '⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
 
     this.points.forEach((p, i) => {
-      // 점
+      // 점 (저신뢰도는 주황색 + 경고 표시)
       ctx.beginPath();
       ctx.arc(p.xPx, p.yPx, 7, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255, 87, 34, 0.85)';
+      ctx.fillStyle = p.lowConf ? 'rgba(255, 152, 0, 0.85)' : 'rgba(255, 87, 34, 0.85)';
       ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = p.lowConf ? '#fff176' : '#fff';
+      ctx.lineWidth = p.lowConf ? 2 : 1.5;
       ctx.stroke();
 
       // 번호
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 13px sans-serif';
       ctx.fillText(circleNumbers[i] ?? `${i+1}`, p.xPx + 9, p.yPx - 6);
+      if (p.lowConf) {
+        ctx.fillStyle = '#fff176';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('⚠', p.xPx - 14, p.yPx - 6);
+      }
 
       // 이전 점과의 연결선 + 거리 표시
       if (i > 0) {
