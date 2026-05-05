@@ -468,14 +468,14 @@ async function runAutoTracking() {
     const result = at.findInCanvas(activeCanvas(), interval);
     const { x, y, confidence, lowConfidence, outOfBounds } = result;
 
-    // 화면 밖 이탈 또는 저신뢰도 → 즉시 중단
+    // 화면 밖 이탈 → 즉시 중단
     if (outOfBounds) {
       $('auto-seed-status').textContent = '⚠️ 물체가 화면 밖으로 벗어남 — 추적 중단';
       break;
     }
+    // 저신뢰도 → 경고만 표시하고 계속 진행
     if (lowConfidence) {
-      $('auto-seed-status').textContent = '⚠️ 신뢰도 낮음 — 추적 중단 (박스 재선택 후 다시 시도)';
-      break;
+      $('auto-seed-status').textContent = '⚠️ 신뢰도 낮음 — 계속 추적 중';
     }
 
     at.updateVelocity(x, y);

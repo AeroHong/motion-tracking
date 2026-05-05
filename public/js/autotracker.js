@@ -15,8 +15,8 @@ export class AutoTracker {
     this.box      = null;
     this.seeded   = false;
 
-    // NCC 저신뢰도 임계값 (0~1, 이 값 미만이면 저신뢰)
-    this.NCC_LOW_THRESHOLD = 0.45;
+    // NCC 저신뢰도 임계값 (0~1, 이 값 미만이면 저신뢰 표시용)
+    this.NCC_LOW_THRESHOLD = 0.15;
   }
 
   // ── 박스 드래그로 시드 설정 ──────────────────────────
