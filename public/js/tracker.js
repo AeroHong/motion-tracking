@@ -46,8 +46,9 @@ export class Tracker {
     const origin = this.points[0];
     return this.points.map(p => ({
       ...p,
-      relXCm: p.xCm !== null ? p.xCm - origin.xCm : null,
-      relYCm: p.yCm !== null ? -(p.yCm - origin.yCm) : null,
+      relTSec: p.tSec - origin.tSec,                          // 첫 점 기준 경과 시간
+      relXCm:  p.xCm !== null ? p.xCm  - origin.xCm  : null,
+      relYCm:  p.yCm !== null ? -(p.yCm - origin.yCm) : null,
     }));
   }
 

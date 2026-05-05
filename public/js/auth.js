@@ -13,7 +13,7 @@ const auth     = getAuth(app);
 const db       = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-export { auth, db, ADMIN_EMAIL };
+export { app, auth, db, ADMIN_EMAIL };
 
 export function isAdmin(user) {
   return user?.email?.toLowerCase().trim() === ADMIN_EMAIL;

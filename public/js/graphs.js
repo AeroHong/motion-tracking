@@ -12,7 +12,7 @@ export class GraphRenderer {
     }
   }
 
-  // 자유낙하: y 이동거리 vs 시간
+  // 자유낙하: y 이동거리 vs 시간 (첫 점 기준 0초)
   renderFreeFall(canvasEl, data, unit = 'cm') {
     this._destroy('freeFall');
     this.charts['freeFall'] = new Chart(canvasEl, {
@@ -20,7 +20,7 @@ export class GraphRenderer {
       data: {
         datasets: [{
           label: `자유낙하 y(${unit})`,
-          data: data.map(d => ({ x: d.tSec, y: d.relYCm })),
+          data: data.map(d => ({ x: d.relTSec, y: d.relYCm })),
           borderColor: '#ff5722',
           backgroundColor: 'rgba(255,87,34,0.7)',
           pointRadius: 5,
@@ -29,7 +29,7 @@ export class GraphRenderer {
         }]
       },
       options: {
-        ...this._baseOptions('시간 (s)', 'y 이동거리 (cm)'),
+        ...this._baseOptions('시간 (s)', `y 이동거리 (${unit})`),
         plugins: {
           ...this._baseLegend(),
           title: { display: true, text: '자유낙하: y-t 그래프', color: '#fff' }
@@ -45,7 +45,7 @@ export class GraphRenderer {
       data: {
         datasets: [{
           label: `수평투사 x(${unit})`,
-          data: data.map(d => ({ x: d.tSec, y: d.relXCm })),
+          data: data.map(d => ({ x: d.relTSec, y: d.relXCm })),
           borderColor: '#29b6f6',
           backgroundColor: 'rgba(41,182,246,0.7)',
           pointRadius: 5,
@@ -54,7 +54,7 @@ export class GraphRenderer {
         }]
       },
       options: {
-        ...this._baseOptions('시간 (s)', 'x 이동거리 (cm)'),
+        ...this._baseOptions('시간 (s)', `x 이동거리 (${unit})`),
         plugins: {
           ...this._baseLegend(),
           title: { display: true, text: '수평투사: x-t 그래프 (등속)', color: '#fff' }
@@ -71,7 +71,7 @@ export class GraphRenderer {
         datasets: [
           {
             label: `수평투사 y(${unit})`,
-            data: projData.map(d => ({ x: d.tSec, y: d.relYCm })),
+            data: projData.map(d => ({ x: d.relTSec, y: d.relYCm })),
             borderColor: '#66bb6a',
             backgroundColor: 'rgba(102,187,106,0.7)',
             pointRadius: 5,
@@ -80,7 +80,7 @@ export class GraphRenderer {
           },
           {
             label: `자유낙하 y(${unit})`,
-            data: freeFallData.map(d => ({ x: d.tSec, y: d.relYCm })),
+            data: freeFallData.map(d => ({ x: d.relTSec, y: d.relYCm })),
             borderColor: '#ff5722',
             backgroundColor: 'rgba(255,87,34,0.4)',
             pointRadius: 4,
@@ -91,7 +91,7 @@ export class GraphRenderer {
         ]
       },
       options: {
-        ...this._baseOptions('시간 (s)', 'y 이동거리 (cm)'),
+        ...this._baseOptions('시간 (s)', `y 이동거리 (${unit})`),
         plugins: {
           ...this._baseLegend(),
           title: { display: true, text: '수평투사 y vs 자유낙하 비교', color: '#fff' }

@@ -14,5 +14,11 @@ service cloud.firestore {
       allow read, write: if request.auth != null
                          && request.auth.uid == userId;
     }
+
+    // 보고서: 본인만 읽기/쓰기
+    match /reports/{userId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
   }
 }

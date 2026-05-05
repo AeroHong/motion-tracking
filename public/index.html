@@ -79,6 +79,19 @@
 
   <!-- ── Step 2: 영상 업로드 ───────────────────── -->
   <section id="screen-upload" class="hidden">
+
+    <!-- 이전 저장 보고서 (있을 때만 표시) -->
+    <div id="prev-report-card" class="upload-card hidden">
+      <h3>📂 저장된 보고서</h3>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px;">
+        <span id="prev-report-info" style="font-size:14px;color:var(--text-dim);"></span>
+        <a id="btn-download-prev" class="btn-secondary" target="_blank"
+           style="text-decoration:none;display:inline-flex;align-items:center;padding:0 16px;min-height:40px;border-radius:8px;font-size:14px;font-weight:600;">
+          📥 보고서 다운로드
+        </a>
+      </div>
+    </div>
+
     <div class="upload-card">
       <h3>① 자유낙하 영상</h3>
       <div class="upload-row">
@@ -196,6 +209,12 @@
         <div class="chart-box"><canvas id="chart-proj-x"></canvas></div>
         <div class="chart-box"><canvas id="chart-proj-y"></canvas></div>
       </div>
+    </div>
+
+    <!-- 클라우드 저장 상태 -->
+    <div class="result-section">
+      <h3>☁ 클라우드 저장</h3>
+      <p id="cloud-save-status" style="font-size:14px;color:var(--text-dim);">보고서를 저장하면 나중에 다시 다운로드할 수 있습니다.</p>
     </div>
 
     <div class="result-section">

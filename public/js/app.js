@@ -6,8 +6,9 @@ import { VideoController }    from './video.js';
 import { Calibration }        from './calibration.js';
 import { Tracker }            from './tracker.js';
 import { AutoTracker }        from './autotracker.js';
-import { GraphRenderer }      from './graphs.js';
-import { generateReport }     from './report.js';
+import { GraphRenderer }                        from './graphs.js';
+import { generateReport }                        from './report.js';
+import { saveReportToCloud, loadSavedReportMeta } from './saveReport.js';
 
 
 const $ = id => document.getElementById(id);
@@ -65,6 +66,7 @@ initAuth(
       if (!allowed) { $('blocked-domain').textContent = domain; showScreen('blocked'); return; }
     } catch (e) { console.error('도메인 검증 오류:', e); }
     showScreen('upload');
+    checkPrevReport();
   },
   () => {
     currentUser = null;
@@ -264,7 +266,7 @@ function setMode(mode) {
     mode === 'calibration' ? '자(ruler)의 양 끝점 두 곳을 클릭하세요' :
     mode === 'tracking'    ? '물체 중심을 클릭하세요 (← → 키로 프레임 이동)' :
     mode === 'auto-box'    ? '추적할 물체를 박스로 드래그하세요' :
-    mode === null          ? '점을 드래그하여 위치 수정 가능' : '';
+    mode === null          ? '점 탭→선택(✕), 재탭→삭제 / 드래그→이동' : '';
 }
 
 function updateCalibStatus() {
@@ -382,8 +384,14 @@ function onPointerMove(e) {
 
 function onPointerUp(e) {
   if (potentialDrag) {
-    // 드래그 없이 탭 → 점 선택 / 선택 해제 토글
-    selectedPointIdx = (selectedPointIdx === potentialDrag.index) ? -1 : potentialDrag.index;
+    if (selectedPointIdx === potentialDrag.index) {
+      // 이미 선택된 점을 재탭 → 삭제
+      activeTracker().removeAt(potentialDrag.index);
+      selectedPointIdx = -1;
+    } else {
+      // 새 점 탭 → 선택 (✕ 표시)
+      selectedPointIdx = potentialDrag.index;
+    }
     potentialDrag = null;
     redraw(); return;
   }
@@ -535,13 +543,40 @@ function renderAllGraphs() {
 $('btn-report').addEventListener('click', async () => {
   const name = $('student-name').value.trim() || '이름없음';
   const cls  = $('student-class').value.trim() || '-';
-  await generateReport({
-    studentName: name, className: cls,
-    date: new Date().toLocaleDateString('ko-KR'),
-    freeFallCanvas: ffCanvas, projectileCanvas: projCanvas,
-    ffData:   ffTracker.getRelativeData(),
-    projData: projTracker.getRelativeData(),
-    calibration,
-    chartCanvases: { ffChart: $('chart-ff'), projXChart: $('chart-proj-x'), projYChart: $('chart-proj-y') }
-  });
+  const ffData   = ffTracker.getRelativeData();
+  const projData = projTracker.getRelativeData();
+
+  $('cloud-save-status').textContent = '☁ 저장 중...';
+  $('cloud-save-status').style.color = 'var(--text-dim)';
+
+  try {
+    const pngBlob = await generateReport({
+      studentName: name, className: cls,
+      date: new Date().toLocaleDateString('ko-KR'),
+      freeFallCanvas: ffCanvas, projectileCanvas: projCanvas,
+      ffData, projData, calibration,
+      chartCanvases: { ffChart: $('chart-ff'), projXChart: $('chart-proj-x'), projYChart: $('chart-proj-y') }
+    });
+
+    const reportUrl = await saveReportToCloud({ studentName: name, className: cls, ffData, projData, calibration, pngBlob });
+    $('cloud-save-status').textContent = `✅ 저장 완료 — 다음에 로그인해도 다운로드 가능`;
+    $('cloud-save-status').style.color = '#66bb6a';
+    checkPrevReport();
+  } catch (e) {
+    console.error('클라우드 저장 실패:', e);
+    $('cloud-save-status').textContent = `⚠ 클라우드 저장 실패 (로컬 다운로드는 완료됨)`;
+    $('cloud-save-status').style.color = '#ffa726';
+  }
 });
+
+// 업로드 화면에 이전 저장 보고서 표시
+async function checkPrevReport() {
+  try {
+    const meta = await loadSavedReportMeta();
+    if (!meta) return;
+    const date = meta.updatedAt?.toDate?.().toLocaleDateString('ko-KR') ?? '';
+    $('prev-report-info').textContent = `${meta.studentName || ''} ${meta.className || ''}  저장일: ${date}`;
+    $('btn-download-prev').href = meta.reportUrl;
+    $('prev-report-card').classList.remove('hidden');
+  } catch (e) { /* 조용히 무시 */ }
+}
