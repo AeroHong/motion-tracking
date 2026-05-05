@@ -109,7 +109,8 @@ function checkUploadReady() {
 
 $('btn-to-track').addEventListener('click', () => {
   showScreen('track');
-  fitCanvases();
+  // 화면 표시 후 레이아웃 계산 완료 시점에 맞춤
+  requestAnimationFrame(() => requestAnimationFrame(fitCanvases));
 });
 
 // ← 영상 변경으로 돌아가기
@@ -122,20 +123,29 @@ $('btn-back-upload').addEventListener('click', () => {
 
 // ── 화면 맞춤 ─────────────────────────────────────────
 function fitCanvases() {
+  // wrapper는 두 캔버스가 공유 — 하나만 보이는 상태여도 wrapper 크기는 동일
+  const wrapper = document.querySelector('.canvas-wrapper');
+  if (!wrapper) return;
+  const ww = wrapper.clientWidth;
+  const wh = wrapper.clientHeight;
+  if (!ww || !wh) return; // 숨겨진 화면이면 0 → 건너뜀
+
   [ffCanvas, projCanvas].forEach(canvas => {
     if (!canvas.width || !canvas.height) return;
-    const wrapper = canvas.closest('.canvas-wrapper');
-    if (!wrapper) return;
-    // wrapper 크기 측정 (border 제외)
-    const ww = wrapper.clientWidth;
-    const wh = wrapper.clientHeight;
-    if (!ww || !wh) return;
     const scale = Math.min(ww / canvas.width, wh / canvas.height);
     canvas.style.width  = Math.round(canvas.width  * scale) + 'px';
     canvas.style.height = Math.round(canvas.height * scale) + 'px';
   });
 }
+
+// 창 크기 변경 시 재조정
 window.addEventListener('resize', fitCanvases);
+
+// canvas-wrapper 크기 변경 감지 (패널 열림/닫힘 등)
+if (window.ResizeObserver) {
+  new ResizeObserver(fitCanvases)
+    .observe(document.querySelector('.canvas-wrapper'));
+}
 
 // ── 트래킹 화면 헬퍼 ──────────────────────────────────
 const activeController  = () => activeVideo === 'ff' ? ffController    : projController;
@@ -155,6 +165,7 @@ function switchVideo(type) {
   projCanvas.classList.toggle('hidden-canvas', type !== 'proj');
   $('frame-slider').max   = Math.max(0, activeController().totalFrames - 1);
   $('frame-slider').value = activeController().currentFrame;
+  requestAnimationFrame(fitCanvases);
   redraw();
   updateFrameInfo();
 }
@@ -312,7 +323,8 @@ function onPointerDown(e) {
     });
     if (hit) {
       const [bx, by, bw, bh] = hit.bbox;
-      activeAutoTracker().seedFromBox(activeCanvas(), bx, by, bw, bh);
+      // ML 박스는 배경 포함이 많아 중심 65%만 템플릿으로 사용
+      activeAutoTracker().seedFromBox(activeCanvas(), bx, by, bw, bh, 0.65);
       $('auto-seed-status').textContent =
         `"${hit.class}" 감지 확정 (${Math.round(hit.score * 100)}%) — 추적 시작을 누르세요`;
       $('btn-start-auto').disabled = false;
@@ -491,23 +503,25 @@ async function runAutoTracking() {
     if (lowConfidence) lowConfCount++;
     else lowConfCount = 0;
 
+    // 연속 저신뢰도 경고 (중단 안 함 — 사용자가 직접 판단)
+    if (lowConfCount >= 4) {
+      $('auto-seed-status').textContent = `⚠️ 신뢰도 낮음 — 계속 추적 중 (취소하려면 ■ 중단)`;
+    }
+
     count++;
     $('auto-progress-bar').style.width   = Math.round((count / total) * 100) + '%';
     $('auto-progress-label').textContent = `${count} / ${total}`;
     updateFrameInfo();
 
-    if (lowConfCount >= 3) {
-      stopped = true;
-      $('auto-seed-status').textContent = '⚠️ 물체를 잃었습니다. 박스를 다시 설정하세요.';
-      break;
-    }
     await new Promise(r => setTimeout(r, 0));
   }
 
   $('btn-start-auto').disabled = false;
   $('btn-stop-auto').disabled  = true;
-  if (lowConfCount < 3)
-    $('auto-seed-status').textContent = `완료 — ${count}개 점 기록됨`;
+  const warnCount = activeTracker().points.filter(p => p.lowConf).length;
+  $('auto-seed-status').textContent = stopped
+    ? `중단 — ${count}개 점 기록됨`
+    : `완료 — ${count}개 점 기록됨${warnCount > 0 ? ` (⚠️ 저신뢰도 ${warnCount}개)` : ''}`;
   setMode(null);
 }
 

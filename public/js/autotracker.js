@@ -15,16 +15,22 @@ export class AutoTracker {
     this.box      = null;
     this.seeded   = false;
 
-    // 신뢰도 기준 (normalized SSD)
-    this.BASE_SSD_THRESHOLD = 2500; // 이 이상이면 저신뢰도
+    // 신뢰도 기준 (normalized SSD) — 값이 클수록 관대
+    this.BASE_SSD_THRESHOLD = 9000;
   }
 
   // ── 박스 드래그로 시드 설정 ──────────────────────────
-  seedFromBox(canvas, bx, by, bw, bh) {
+  // crop: 0~1, ML 감지 박스처럼 배경 포함 시 중심부만 사용 (기본 1.0 = 전체)
+  seedFromBox(canvas, bx, by, bw, bh, crop = 1.0) {
+    const shrink = (1 - crop) / 2;
+    bx = bx + bw * shrink;
+    by = by + bh * shrink;
+    bw = bw * crop;
+    bh = bh * crop;
     const cx = bx + bw / 2;
     const cy = by + bh / 2;
-    this.thW = Math.ceil(bw / 2);
-    this.thH = Math.ceil(bh / 2);
+    this.thW = Math.max(10, Math.ceil(bw / 2));
+    this.thH = Math.max(10, Math.ceil(bh / 2));
     this.box      = { x: bx, y: by, w: bw, h: bh };
     this.lastPos  = { x: cx, y: cy };
     this.velocity = { vx: 0, vy: 0 };
