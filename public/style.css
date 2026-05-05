@@ -183,6 +183,7 @@ input[type="file"] {
 
 .canvas-wrapper {
   flex: 1;
+  min-height: 0;        /* flex 컨테이너 높이 버그 방지 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -192,10 +193,11 @@ input[type="file"] {
 }
 
 .canvas-wrapper canvas {
-  max-width: 100%;
-  max-height: 100%;
   display: block;
   touch-action: none;
+  /* JS fitCanvases()가 width/height 설정 — 기본 fallback */
+  max-width: 100%;
+  max-height: 100%;
 }
 
 /* 비활성 캔버스 숨김 */
@@ -386,6 +388,17 @@ input[type="file"] {
 }
 
 /* ── 자동 추적 버튼 ──────────────────────────────── */
+.btn-ml {
+  background: linear-gradient(135deg, #1565c0, #0d47a1);
+  color: #fff;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.btn-ml:disabled { opacity: 0.5; }
+
 .btn-reset {
   background: transparent;
   border: 1px solid #b71c1c;
