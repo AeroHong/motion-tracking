@@ -8,14 +8,25 @@ export class Tracker {
 
   reset() { this.points = []; }
 
-  addPoint(xPx, yPx, frame, fps, lowConf = false) {
-    const tSec = frame / fps;
+  addPoint(xPx, yPx, frame, tSec, lowConf = false) {
     const xUnit = this.calibration.toUnit(xPx);
     const yCm   = this.calibration.toUnit(yPx);
     this.points.push({ frame, tSec, xPx, yPx, xCm: xUnit, yCm, lowConf });
   }
 
   removeLast() { this.points.pop(); }
+
+  recomputeTimes(captureFps) {
+    const fps = Math.max(1, captureFps);
+    this.points.forEach(p => { p.tSec = p.frame / fps; });
+  }
+
+  recomputeUnits() {
+    this.points.forEach(p => {
+      p.xCm = this.calibration.toUnit(p.xPx);
+      p.yCm = this.calibration.toUnit(p.yPx);
+    });
+  }
 
   removeAt(index) {
     if (index >= 0 && index < this.points.length) {
@@ -48,7 +59,7 @@ export class Tracker {
       ...p,
       relTSec: p.tSec - origin.tSec,                          // 첫 점 기준 경과 시간
       relXCm:  p.xCm !== null ? p.xCm  - origin.xCm  : null,
-      relYCm:  p.yCm !== null ? -(p.yCm - origin.yCm) : null,
+      relYCm:  p.yCm !== null ?  (p.yCm - origin.yCm) : null,
     }));
   }
 

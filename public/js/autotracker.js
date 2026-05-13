@@ -178,6 +178,15 @@ export class AutoTracker {
     }
   }
 
+  // 마지막 위치를 수동 보정한 뒤 이어서 추적할 때 호출
+  resumeFrom(canvas, x, y) {
+    const { width: W, height: H } = canvas;
+    const ctx = canvas.getContext('2d');
+    this.lastPos  = { x, y };
+    this.velocity = { vx: 0, vy: 0 };
+    this._buildTemplate(ctx.getImageData(0, 0, W, H), W, H, x, y);
+  }
+
   reset() {
     this.template = null;
     this.lastPos  = null;

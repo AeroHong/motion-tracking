@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#0d1117"/>
+  <!-- 좌표축 -->
+  <line x1="80" y1="420" x2="80" y2="80" stroke="#4a9eff" stroke-width="18" stroke-linecap="round"/>
+  <line x1="80" y1="420" x2="440" y2="420" stroke="#4a9eff" stroke-width="18" stroke-linecap="round"/>
+  <!-- 자유낙하 포물선 점들 -->
+  <circle cx="130" cy="100" r="16" fill="#e94560"/>
+  <circle cx="190" cy="170" r="16" fill="#e94560"/>
+  <circle cx="260" cy="280" r="16" fill="#e94560"/>
+  <circle cx="340" cy="420" r="16" fill="#e94560"/>
+  <!-- 연결선 -->
+  <polyline points="130,100 190,170 260,280 340,420"
+    stroke="#e94560" stroke-width="5" fill="none"
+    stroke-dasharray="14,7" opacity="0.6"/>
+  <!-- 수평투사 x방향 점들 -->
+  <circle cx="190" cy="390" r="12" fill="#66bb6a"/>
+  <circle cx="260" cy="390" r="12" fill="#66bb6a"/>
+  <circle cx="330" cy="390" r="12" fill="#66bb6a"/>
+  <circle cx="400" cy="390" r="12" fill="#66bb6a"/>
+</svg>

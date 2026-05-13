@@ -5,7 +5,7 @@ export class VideoController {
     this.video = videoEl;
     this.canvas = canvasEl;
     this.ctx = canvasEl.getContext('2d');
-    this.fps = 30; // 기본값
+    this.fps = 30;
     this.frameInterval = 1 / 30;
     this.onFpsDetected = onFpsDetected;
     this._fpsDetected = false;
@@ -25,19 +25,26 @@ export class VideoController {
     });
   }
 
-  // requestVideoFrameCallback 으로 실제 프레임 타이밍 측정
   _detectFps() {
-    return new Promise(resolve => {
+    return new Promise(async resolve => {
+      // 1순위: 시크 기반 감지 (디스플레이 주사율에 무관, 240fps 정확 감지)
+      try {
+        const fps = await this._detectFpsBySeeking();
+        this._applyFps(fps, true);
+        this.video.currentTime = 0;
+        resolve();
+        return;
+      } catch (_) {}
+
+      // 2순위: requestVideoFrameCallback 샘플링 (60Hz 이하 영상 fallback)
       if (!('requestVideoFrameCallback' in HTMLVideoElement.prototype)) {
-        // 미지원 브라우저 → 기본값 유지
         this.onFpsDetected(this.fps, false);
         resolve();
         return;
       }
 
       const timestamps = [];
-      const SAMPLE = 10; // 10프레임 샘플
-
+      const SAMPLE = 20;
       const onFrame = (now, meta) => {
         timestamps.push(meta.mediaTime);
         if (timestamps.length < SAMPLE) {
@@ -45,22 +52,13 @@ export class VideoController {
         } else {
           this.video.pause();
           this.video.currentTime = 0;
-
           const intervals = [];
-          for (let i = 1; i < timestamps.length; i++) {
+          for (let i = 1; i < timestamps.length; i++)
             intervals.push(timestamps[i] - timestamps[i - 1]);
-          }
-          const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-          const detectedFps = Math.round(1 / avgInterval);
-
-          // 일반적인 fps 값으로 보정 (24/25/30/60)
-          const standard = [24, 25, 30, 60];
-          this.fps = standard.reduce((prev, curr) =>
-            Math.abs(curr - detectedFps) < Math.abs(prev - detectedFps) ? curr : prev
-          );
-          this.frameInterval = 1 / this.fps;
-          this._fpsDetected = true;
-          this.onFpsDetected(this.fps, true);
+          const avg = intervals.reduce((a, b) => a + b) / intervals.length;
+          const detected = Math.round(1 / avg);
+          const fps = _nearestStdFps(detected);
+          this._applyFps(fps, true);
           resolve();
         }
       };
@@ -76,9 +74,42 @@ export class VideoController {
     });
   }
 
-  setFps(fps) {
+  // 시크를 통해 실제 프레임 간격을 측정하는 fps 감지
+  // 각 후보 fps마다 1.1 프레임 길이만큼 시크 → 실제 착지점으로 fps 판별
+  async _detectFpsBySeeking() {
+    const duration = this.video.duration;
+    if (!duration || duration < 0.3) throw new Error('too short');
+
+    const startT = Math.min(0.3, duration * 0.3);
+    await this._seekTo(startT);
+    const t0 = this.video.currentTime;
+
+    for (const fps of [240, 120, 60, 30, 25, 24]) {
+      const step = 1.1 / fps;              // 1.1 프레임 길이
+      await this._seekTo(t0 + step);
+      const t1 = this.video.currentTime;
+
+      const moved = t1 - t0;
+      const expected = 1 / fps;
+      // 실제 착지점이 해당 fps의 1프레임 간격과 2ms 이내면 일치
+      if (moved > 0.0001 && Math.abs(moved - expected) < 0.002) {
+        return fps;
+      }
+    }
+    throw new Error('detection failed');
+  }
+
+  _applyFps(detectedFps, auto) {
+    const fps = Math.min(detectedFps, 60);
     this.fps = fps;
     this.frameInterval = 1 / fps;
+    this._fpsDetected = true;
+    this.onFpsDetected(fps, auto);
+  }
+
+  setFps(fps) {
+    this.fps = Math.min(fps, 60);
+    this.frameInterval = 1 / this.fps;
   }
 
   drawCurrentFrame() {
@@ -88,8 +119,7 @@ export class VideoController {
   }
 
   async seekToFrame(frameIndex) {
-    const t = frameIndex * this.frameInterval;
-    return this._seekTo(t);
+    return this._seekTo(frameIndex * this.frameInterval);
   }
 
   async seekToTime(t) {
@@ -122,4 +152,11 @@ export class VideoController {
   get currentFrame() {
     return Math.round(this.video.currentTime * this.fps);
   }
+}
+
+function _nearestStdFps(detected) {
+  const standard = [24, 25, 30, 60, 120, 240];
+  return standard.reduce((p, c) =>
+    Math.abs(c - detected) < Math.abs(p - detected) ? c : p
+  );
 }

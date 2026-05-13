@@ -1,0 +1,25 @@
+{
+  "name": "Motion Tracker",
+  "short_name": "Motion Tracker",
+  "description": "자유낙하·수평투사 운동 영상 분석 도구 — 선유고등학교 홍창기 개발",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "orientation": "any",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

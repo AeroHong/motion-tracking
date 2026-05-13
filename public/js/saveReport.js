@@ -1,30 +1,33 @@
 // saveReport.js — 보고서 PNG + 데이터를 Firebase Storage/Firestore에 저장
 
 import { app, auth, db } from './auth.js';
-import { doc, setDoc, getDoc, Timestamp }
+import { collection, addDoc, getDocs, query, orderBy, limit, Timestamp, doc, deleteDoc }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import { getStorage, ref, uploadBytes, getDownloadURL }
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 const storage = getStorage(app);
 
-// 보고서 PNG + 메타데이터를 클라우드에 저장, 다운로드 URL 반환
-export async function saveReportToCloud({ studentName, className, ffData, projData, calibration, pngBlob }) {
+// ── 클래식 모드 (자유낙하 + 수평투사) ───────────────────
+
+export async function saveReportToCloud({ studentName, className, ffData, projData, ffCalibration, projCalibration, pngBlob }) {
   const user = auth.currentUser;
   if (!user) throw new Error('로그인이 필요합니다.');
 
-  // 1. PNG → Firebase Storage
-  const storageRef = ref(storage, `reports/${user.uid}/report.png`);
+  const reportId   = Date.now().toString();
+  const storagePath = `reports/${user.uid}/${reportId}.png`;
+
+  const storageRef = ref(storage, storagePath);
   await uploadBytes(storageRef, pngBlob, { contentType: 'image/png' });
   const reportUrl = await getDownloadURL(storageRef);
 
-  // 2. 메타데이터 → Firestore (그래프 재생성용 요약 데이터 포함)
-  await setDoc(doc(db, 'reports', user.uid), {
-    studentName,
-    className,
-    unit: calibration.unit,
-    updatedAt: Timestamp.now(),
-    ffPoints:   ffData.map(p => ({
+  const entriesCol = collection(db, 'reports', user.uid, 'entries');
+  await addDoc(entriesCol, {
+    studentName, className,
+    unit: ffCalibration.unit,
+    createdAt: Timestamp.now(),
+    storagePath,
+    ffPoints: ffData.map(p => ({
       t: +(p.relTSec?.toFixed(4) ?? 0),
       y: +(p.relYCm?.toFixed(3)  ?? 0),
     })),
@@ -39,15 +42,78 @@ export async function saveReportToCloud({ studentName, className, ffData, projDa
   return reportUrl;
 }
 
-// 저장된 보고서 메타데이터 조회 (없으면 null)
-export async function loadSavedReportMeta() {
+export async function loadAllReportsMeta({ maxCount = 30 } = {}) {
   const user = auth.currentUser;
-  if (!user) return null;
+  if (!user) return [];
   try {
-    const snap = await getDoc(doc(db, 'reports', user.uid));
-    return snap.exists() ? snap.data() : null;
+    const entriesCol = collection(db, 'reports', user.uid, 'entries');
+    const q = query(entriesCol, orderBy('createdAt', 'desc'), limit(maxCount));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (e) {
-    console.error('보고서 조회 실패:', e);
-    return null;
+    console.error('보고서 목록 조회 실패:', e);
+    return [];
+  }
+}
+
+export async function deleteClassicReport({ docId, storagePath }) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('로그인이 필요합니다.');
+  await deleteDoc(doc(db, 'reports', user.uid, 'entries', docId));
+  if (storagePath) {
+    try { await deleteObject(ref(storage, storagePath)); } catch (e) { console.warn('Storage 삭제 실패:', e); }
+  }
+}
+
+// ── 자유 물체 운동 모드 ──────────────────────────────────
+
+export async function saveFreeMotionReportToCloud({ studentName, className, motionLabel, data, calibration, pngBlob }) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('로그인이 필요합니다.');
+
+  const reportId    = Date.now().toString();
+  const storagePath = `reports/${user.uid}/free_${reportId}.png`;
+
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, pngBlob, { contentType: 'image/png' });
+  const reportUrl = await getDownloadURL(storageRef);
+
+  const entriesCol = collection(db, 'reports', user.uid, 'free_entries');
+  await addDoc(entriesCol, {
+    studentName, className, motionLabel,
+    unit: calibration.unit,
+    createdAt: Timestamp.now(),
+    storagePath,
+    points: data.map(p => ({
+      t: +(p.relTSec?.toFixed(4) ?? 0),
+      x: +(p.relXCm?.toFixed(3)  ?? 0),
+      y: +(p.relYCm?.toFixed(3)  ?? 0),
+    })),
+    reportUrl,
+  });
+
+  return reportUrl;
+}
+
+export async function loadAllFreeMotionReports({ maxCount = 30 } = {}) {
+  const user = auth.currentUser;
+  if (!user) return [];
+  try {
+    const entriesCol = collection(db, 'reports', user.uid, 'free_entries');
+    const q = query(entriesCol, orderBy('createdAt', 'desc'), limit(maxCount));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.error('자유 물체 운동 보고서 목록 조회 실패:', e);
+    return [];
+  }
+}
+
+export async function deleteFreeMotionReport({ docId, storagePath }) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('로그인이 필요합니다.');
+  await deleteDoc(doc(db, 'reports', user.uid, 'free_entries', docId));
+  if (storagePath) {
+    try { await deleteObject(ref(storage, storagePath)); } catch (e) { console.warn('Storage 삭제 실패:', e); }
   }
 }
