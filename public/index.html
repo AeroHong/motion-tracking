@@ -516,6 +516,37 @@
     <button id="btn-about" class="footer-about-btn">앱 정보</button>
   </footer>
 
+  <!-- ── iOS 홈 화면 추가 안내 모달 ── -->
+  <div id="ios-install-modal" class="modal-overlay hidden">
+    <div class="modal-box ios-install-box">
+      <button id="ios-install-close" class="modal-close-btn">✕ 닫기</button>
+      <h2 class="ios-install-title">📲 홈 화면에 추가하기</h2>
+      <p class="ios-install-sub">Safari에서 아래 순서대로 진행하세요</p>
+      <ol class="ios-install-steps">
+        <li>
+          <span class="ios-step-num">1</span>
+          <span>하단 <strong>공유 버튼</strong>을 탭하세요</span>
+          <div class="ios-share-icon">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/>
+              <polyline points="8 12 12 8 16 12"/>
+              <line x1="12" y1="8" x2="12" y2="17"/>
+            </svg>
+          </div>
+        </li>
+        <li>
+          <span class="ios-step-num">2</span>
+          <span>메뉴를 스크롤하여 <strong>"홈 화면에 추가"</strong>를 탭하세요</span>
+        </li>
+        <li>
+          <span class="ios-step-num">3</span>
+          <span>오른쪽 위 <strong>"추가"</strong>를 탭하면 완료!</span>
+        </li>
+      </ol>
+      <p class="ios-install-note">※ Safari 브라우저에서만 가능합니다</p>
+    </div>
+  </div>
+
   <!-- ── 앱 정보 모달 ── -->
   <div id="about-modal" class="modal-overlay hidden">
     <div class="modal-box about-box">

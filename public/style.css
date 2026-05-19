@@ -737,6 +737,72 @@ input[type="file"] {
 }
 
 /* ── 앱 정보 모달 ── */
+/* ── iOS 홈 화면 추가 안내 모달 ── */
+.ios-install-box {
+  max-width: 360px;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ios-install-title {
+  font-size: 20px;
+  color: var(--accent);
+  margin: 0;
+  text-align: center;
+}
+.ios-install-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+  margin: -8px 0 0;
+}
+.ios-install-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  margin: 0;
+}
+.ios-install-steps li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.ios-step-num {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #000;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ios-share-icon {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--accent);
+}
+.ios-install-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 0;
+}
+
 .about-box {
   max-width: 420px;
   display: flex;

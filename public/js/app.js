@@ -6,6 +6,11 @@ if ('serviceWorker' in navigator) {
 }
 
 let _installPrompt = null;
+const _isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const _isStandalone = window.navigator.standalone === true ||
+                      window.matchMedia('(display-mode: standalone)').matches;
+
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   _installPrompt = e;
@@ -15,6 +20,11 @@ window.addEventListener('appinstalled', () => {
   document.getElementById('btn-install')?.classList.add('hidden');
   _installPrompt = null;
 });
+
+// iOS: beforeinstallprompt 없이 버튼 표시
+if (_isIOS && !_isStandalone) {
+  document.getElementById('btn-install')?.classList.remove('hidden');
+}
 
 import { initAuth, login, logout } from './auth.js';
 import { ZoomController } from './zoomController.js';
@@ -91,11 +101,19 @@ $('btn-login').addEventListener('click', login);
 $('btn-logout').addEventListener('click', logout);
 
 $('btn-install')?.addEventListener('click', async () => {
-  if (!_installPrompt) return;
-  _installPrompt.prompt();
-  const { outcome } = await _installPrompt.userChoice;
-  if (outcome === 'accepted') $('btn-install').classList.add('hidden');
-  _installPrompt = null;
+  if (_installPrompt) {
+    _installPrompt.prompt();
+    const { outcome } = await _installPrompt.userChoice;
+    if (outcome === 'accepted') $('btn-install').classList.add('hidden');
+    _installPrompt = null;
+  } else if (_isIOS && !_isStandalone) {
+    $('ios-install-modal').classList.remove('hidden');
+  }
+});
+
+$('ios-install-close')?.addEventListener('click', () => $('ios-install-modal').classList.add('hidden'));
+$('ios-install-modal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) $('ios-install-modal').classList.add('hidden');
 });
 
 $('btn-about').addEventListener('click', () => $('about-modal').classList.remove('hidden'));

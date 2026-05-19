@@ -739,20 +739,17 @@ function _renderTable(data, unit) {
       <th>번호</th><th>시간(s)</th>
       <th>x (${u})</th><th>Δx (${u})</th>
       <th>y (${u})</th><th>Δy (${u})</th>
-      <th>거리 (${u})</th>
     </tr></thead><tbody>`;
 
   data.forEach((p, i) => {
     const prev = data[i - 1];
     const dx   = prev != null ? p.relXCm - prev.relXCm : null;
     const dy   = prev != null ? p.relYCm - prev.relYCm : null;
-    const dist = (dx != null && dy != null) ? Math.sqrt(dx * dx + dy * dy) : null;
     html += `<tr>
       <td>${i + 1}</td>
       <td>${fmt(p.relTSec, 3)}</td>
       <td>${fmt(p.relXCm)}</td><td>${dx != null ? fmt(dx) : '-'}</td>
       <td>${fmt(p.relYCm)}</td><td>${dy != null ? fmt(dy) : '-'}</td>
-      <td>${dist != null ? fmt(dist) : '-'}</td>
     </tr>`;
   });
   html += '</tbody></table>';
@@ -766,17 +763,15 @@ function _bindCopyTable() {
     if (!data.length) return;
     const u = calib.unit;
     const fmt = (v, d = 2) => (v != null && !isNaN(v)) ? v.toFixed(d) : '';
-    const header = ['번호', '시간(s)', `x(${u})`, `Δx(${u})`, `y(${u})`, `Δy(${u})`, `거리(${u})`].join('\t');
+    const header = ['번호', '시간(s)', `x(${u})`, `Δx(${u})`, `y(${u})`, `Δy(${u})`].join('\t');
     const lines = data.map((p, i) => {
       const prev = data[i - 1];
       const dx   = prev != null ? p.relXCm - prev.relXCm : null;
       const dy   = prev != null ? p.relYCm - prev.relYCm : null;
-      const dist = (dx != null && dy != null) ? Math.sqrt(dx * dx + dy * dy) : null;
       return [
         i + 1, fmt(p.relTSec, 3),
         fmt(p.relXCm), dx != null ? fmt(dx) : '',
         fmt(p.relYCm), dy != null ? fmt(dy) : '',
-        dist != null ? fmt(dist) : '',
       ].join('\t');
     });
     const tsv = [header, ...lines].join('\n');

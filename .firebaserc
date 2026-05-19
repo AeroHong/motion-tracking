@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "motion-tracking-68d0e"
+  },
+  "targets": {
+    "motion-tracking-68d0e": {
+      "hosting": {
+        "new": ["motion-tracker-kr"],
+        "old": ["motion-tracking-68d0e"]
+      }
+    }
   }
 }
