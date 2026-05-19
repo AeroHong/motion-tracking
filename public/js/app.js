@@ -53,8 +53,8 @@ const screens = {
 };
 
 let currentUser = null;
-// 'calibration' | 'tracking' | 'auto-box' | 'ml-select' | null(이동)
-let activeMode  = null;
+// 'calibration' | 'tracking' | 'auto-box' | 'pan' | null(점 선택/삭제)
+let activeMode  = 'pan';
 let activeVideo = 'ff';
 
 const ffVideo    = $('ff-video');
@@ -397,7 +397,7 @@ $('btn-calib-confirm').addEventListener('click', () => {
   activeTracker().recomputeUnits();
   updateCalibStatus();
   hideCalibBar();
-  setMode(null);
+  setMode('pan');
   redraw();
 });
 
@@ -426,7 +426,7 @@ $('btn-reset').addEventListener('click', () => {
   activeTracker().reset();
   activeAutoTracker().reset();
   dragState = null; dragPoint = null;
-  setMode(null);
+  setMode('pan');
   redraw();
 });
 
@@ -776,7 +776,7 @@ async function runAutoTracking(resume = false) {
     if (!$('auto-seed-status').textContent.startsWith('⚠️')) {
       $('auto-seed-status').textContent = `완료 — ${count}개 점 기록됨`;
     }
-    setMode(null);
+    setMode('pan');
   }
 }
 

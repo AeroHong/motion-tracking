@@ -17,7 +17,7 @@ const $ = id => document.getElementById(id);
 let _show;
 
 const st = {
-  mode:           null,  // 'calibration'|'origin'|'tracking'|'auto-box'|'pan'|null
+  mode:           'pan', // 'calibration'|'origin'|'tracking'|'auto-box'|'pan'|null(점 선택/삭제)
   origin:         null,  // { xPx, yPx }
   selectedIdx:    -1,
   hoverOriginIdx: -1,
@@ -138,7 +138,7 @@ function _bindTrack() {
     if (calib.points.length < 2) return;
     calib.setRealLength(cm);
     tracker.recomputeUnits();
-    _calibStatus(); _hideCalibBar(); _setMode(null); _redraw();
+    _calibStatus(); _hideCalibBar(); _setMode('pan'); _redraw();
   });
 
   $('fm-btn-calib-reset-pts').addEventListener('click', () => {
@@ -159,7 +159,7 @@ function _bindTrack() {
     tracker.reset(); autoTracker.reset();
     st.origin = null; st.dragState = null;
     $('fm-origin-bar').classList.add('hidden');
-    _setMode(null); _redraw();
+    _setMode('pan'); _redraw();
   });
 
   // 프레임 탐색
@@ -354,7 +354,7 @@ function _down(e) {
 
   if (st.mode === 'origin') {
     const pts = tracker.points;
-    if (pts.length === 0) { _setMode(null); return; }
+    if (pts.length === 0) { _setMode('pan'); return; }
     let minD = Infinity, nearest = pts[0];
     pts.forEach(p => {
       const d = Math.hypot(p.xPx - x, p.yPx - y);
@@ -366,7 +366,7 @@ function _down(e) {
       : `(${nearest.xPx.toFixed(0)}, ${nearest.yPx.toFixed(0)}) px`;
     $('fm-origin-bar').classList.remove('hidden');
     $('fm-origin-coords').textContent = `점 ${pts.indexOf(nearest) + 1}번 선택됨`;
-    _setMode(null); _redraw(); return;
+    _setMode('pan'); _redraw(); return;
   }
 
   if (st.mode === null) {
@@ -573,7 +573,7 @@ async function _runAuto(resume) {
   } else {
     if (!$('fm-auto-seed').textContent.startsWith('⚠️'))
       $('fm-auto-seed').textContent = `완료 — ${count}개 점 기록됨`;
-    _setMode(null);
+    _setMode('pan');
   }
 }
 
