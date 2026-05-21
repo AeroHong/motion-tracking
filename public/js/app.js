@@ -796,10 +796,16 @@ $('color-v').addEventListener('input', redraw);
 
 $('btn-to-result').addEventListener('click', () => { showScreen('result'); renderAllGraphs(); });
 
+// 수평투사 x: 촬영 방향(좌→우, 우→좌)에 관계없이 항상 양수로 표시
+function _absX(data) {
+  return data.map(d => ({ ...d, relXCm: d.relXCm != null ? Math.abs(d.relXCm) : null }));
+}
+
 function renderAllGraphs() {
   const ffUnit   = ffCalibration.unit;
   const projUnit = projCalibration.unit;
-  const ffRel = ffTracker.getRelativeData(), projRel = projTracker.getRelativeData();
+  const ffRel   = ffTracker.getRelativeData();
+  const projRel = _absX(projTracker.getRelativeData());
   if (ffRel.length > 0)   graphs.renderFreeFall($('chart-ff'), ffRel, ffUnit);
   if (projRel.length > 0) graphs.renderProjectileX($('chart-proj-x'), projRel, projUnit);
   if (ffRel.length > 0 && projRel.length > 0)
@@ -854,7 +860,7 @@ function _renderDataTable(ffData, projData, ffUnit, projUnit) {
 
 $('btn-copy-table').addEventListener('click', () => {
   const ffRel   = ffTracker.getRelativeData();
-  const projRel = projTracker.getRelativeData();
+  const projRel = _absX(projTracker.getRelativeData());
   const ffUnit   = ffCalibration.unit;
   const projUnit = projCalibration.unit;
   const rows = _tableRows(ffRel, projRel);
@@ -902,7 +908,7 @@ $('btn-report').addEventListener('click', async () => {
   const name = $('student-name').value.trim() || '이름없음';
   const cls  = $('student-class').value.trim() || '00000';
   const ffData   = ffTracker.getRelativeData();
-  const projData = projTracker.getRelativeData();
+  const projData = _absX(projTracker.getRelativeData());
 
   $('cloud-save-status').textContent = '☁ 저장 중...';
   $('cloud-save-status').style.color = 'var(--text-dim)';
