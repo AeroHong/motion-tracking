@@ -7,7 +7,8 @@ import { Tracker }                   from './tracker.js';
 import { AutoTracker }               from './autotracker.js';
 import { GraphRenderer }             from './graphs.js';
 import { pickVideoFromDrive }        from './drivePicker.js';
-import { generateFreeMotionReport }           from './report.js';
+import { generateFreeMotionReport,
+         cropTrajectoryCanvas }               from './report.js';
 import { saveFreeMotionReportToCloud,
          loadAllFreeMotionReports,
          deleteFreeMotionReport }             from './saveReport.js';
@@ -234,9 +235,10 @@ function _bindTrack() {
       const motionLabel  = $('fm-motion-name').value.trim()   || '자유물체운동';
       _redraw();
       const data = _getData();
+      const croppedCanvas = cropTrajectoryCanvas($('fm-canvas'), tracker.points);
       const pngBlob = await generateFreeMotionReport({
         studentName, className, date, motionLabel,
-        trackingCanvas: $('fm-canvas'),
+        trackingCanvas: croppedCanvas,
         data, calibration: calib,
         chartCanvases: {
           xtChart: $('fm-chart-xt'),

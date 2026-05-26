@@ -93,9 +93,12 @@ export async function renderReportBlob({
 
   grLabels.forEach((lbl, i) => {
     _lbl(ctx, lbl, grX[i], grLblY);
-    ctx.fillStyle = '#1a1a2e';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(grX[i], grY, GR_COL_W, GR_H);
     if (grSrcs[i]) ctx.drawImage(grSrcs[i], grX[i], grY, GR_COL_W, GR_H);
+    ctx.strokeStyle = '#d0d0d0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(grX[i], grY, GR_COL_W, GR_H);
   });
 
   _hline(ctx, grBotY + 16, PAD, W - PAD, '#e0e0e0');
@@ -186,9 +189,12 @@ async function renderFreeMotionReportBlob({
 
   grLabels.forEach((lbl, i) => {
     _lbl(ctx, lbl, grX[i], grLblY);
-    ctx.fillStyle = '#f5f7fa';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(grX[i], grY, GR_COL_W, GR_H);
     if (grSrcs[i]) ctx.drawImage(grSrcs[i], grX[i], grY, GR_COL_W, GR_H);
+    ctx.strokeStyle = '#d0d0d0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(grX[i], grY, GR_COL_W, GR_H);
   });
   _hline(ctx, grBotY + 16, PAD, W - PAD, '#e0e0e0');
 
@@ -265,6 +271,31 @@ function _drawFit(ctx, src, dx, dy, dw, dh) {
   const r = Math.min(dw / src.width, dh / src.height);
   const w = src.width * r, h = src.height * r;
   ctx.drawImage(src, dx + (dw - w) / 2, dy + (dh - h) / 2, w, h);
+}
+
+// ── 궤적 이미지 자르기 ─────────────────────────────────────────
+// 첫번째·마지막 추적 점 기준 직사각형으로 캔버스를 잘라 반환.
+// points가 2개 미만이거나 자른 영역이 너무 작으면 원본 반환.
+export function cropTrajectoryCanvas(sourceCanvas, points, padding = 60) {
+  if (!sourceCanvas || !points || points.length < 2) return sourceCanvas;
+
+  const first = points[0];
+  const last  = points[points.length - 1];
+
+  const sx = Math.max(0, Math.round(Math.min(first.xPx, last.xPx) - padding));
+  const sy = Math.max(0, Math.round(Math.min(first.yPx, last.yPx) - padding));
+  const ex = Math.min(sourceCanvas.width,  Math.round(Math.max(first.xPx, last.xPx) + padding));
+  const ey = Math.min(sourceCanvas.height, Math.round(Math.max(first.yPx, last.yPx) + padding));
+  const sw = ex - sx;
+  const sh = ey - sy;
+
+  if (sw < 20 || sh < 20) return sourceCanvas;
+
+  const c   = document.createElement('canvas');
+  c.width   = sw;
+  c.height  = sh;
+  c.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  return c;
 }
 
 function _table(ctx, ffData, projData, ffUnit, projUnit, x, y, width) {

@@ -34,7 +34,7 @@ import { Calibration }        from './calibration.js';
 import { Tracker }            from './tracker.js';
 import { AutoTracker }        from './autotracker.js';
 import { GraphRenderer }                        from './graphs.js';
-import { generateReport }                        from './report.js';
+import { generateReport, cropTrajectoryCanvas }   from './report.js';
 import { saveReportToCloud, loadAllReportsMeta, deleteClassicReport } from './saveReport.js';
 import { pickVideoFromDrive } from './drivePicker.js';
 
@@ -914,10 +914,13 @@ $('btn-report').addEventListener('click', async () => {
   $('cloud-save-status').style.color = 'var(--text-dim)';
 
   try {
+    const croppedFf   = cropTrajectoryCanvas(ffCanvas,   ffTracker.points);
+    const croppedProj = cropTrajectoryCanvas(projCanvas, projTracker.points);
+
     const pngBlob = await generateReport({
       studentName: name, className: cls,
       date: new Date().toLocaleDateString('ko-KR'),
-      freeFallCanvas: ffCanvas, projectileCanvas: projCanvas,
+      freeFallCanvas: croppedFf, projectileCanvas: croppedProj,
       ffData, projData, ffCalibration, projCalibration,
       chartCanvases: { ffChart: $('chart-ff'), projXChart: $('chart-proj-x'), projYChart: $('chart-proj-y') }
     });
