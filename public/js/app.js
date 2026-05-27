@@ -26,7 +26,9 @@ if (_isIOS && !_isStandalone) {
   document.getElementById('btn-install')?.classList.remove('hidden');
 }
 
-import { initAuth, login, logout } from './auth.js';
+import { initAuth, login, logout, db } from './auth.js';
+import { doc, getDoc, setDoc }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { ZoomController } from './zoomController.js';
 import { initFreeMotion }     from './freeMotion.js';
 import { VideoController }    from './video.js';
@@ -120,6 +122,50 @@ $('btn-about').addEventListener('click', () => $('about-modal').classList.remove
 $('about-close').addEventListener('click', () => $('about-modal').classList.add('hidden'));
 $('about-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) $('about-modal').classList.add('hidden');
+});
+
+// ── 촬영 체크리스트 ──────────────────────────────────────
+const _checkboxes = () =>
+  Array.from(document.querySelectorAll('#checklist-modal input[type=checkbox]'));
+
+function _checklistRef(uid) {
+  return doc(db, 'sessions', uid, 'checklist', 'items');
+}
+
+async function _loadChecklist(uid) {
+  try {
+    const snap = await getDoc(_checklistRef(uid));
+    return snap.exists() ? (snap.data().checks || {}) : {};
+  } catch { return {}; }
+}
+
+async function _saveChecklist(uid) {
+  const checks = {};
+  _checkboxes().forEach(cb => { checks[cb.dataset.key] = cb.checked; });
+  try { await setDoc(_checklistRef(uid), { checks }, { merge: true }); } catch {}
+}
+
+function _applyChecklist(checks) {
+  _checkboxes().forEach(cb => { cb.checked = !!checks[cb.dataset.key]; });
+}
+
+async function openChecklistModal() {
+  if (!currentUser) return;
+  const checks = await _loadChecklist(currentUser.uid);
+  _applyChecklist(checks);
+  $('checklist-modal').classList.remove('hidden');
+}
+
+// 체크 변경 시 DB 저장
+$('checklist-modal').addEventListener('change', e => {
+  if (e.target.type === 'checkbox' && currentUser) _saveChecklist(currentUser.uid);
+});
+
+$('btn-checklist').addEventListener('click', openChecklistModal);
+$('checklist-close').addEventListener('click', () => $('checklist-modal').classList.add('hidden'));
+$('checklist-print').addEventListener('click', () => window.print());
+$('checklist-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) $('checklist-modal').classList.add('hidden');
 });
 
 // 모드 선택
