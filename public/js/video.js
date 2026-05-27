@@ -84,14 +84,14 @@ export class VideoController {
     await this._seekTo(startT);
     const t0 = this.video.currentTime;
 
-    for (const fps of [240, 120, 60, 30, 25, 24]) {
-      const step = 1.1 / fps;              // 1.1 프레임 길이
+    // NTSC 계열(29.97, 59.94, 23.976) 포함
+    for (const fps of [240, 120, 59.94, 60, 29.97, 30, 25, 23.976, 24]) {
+      const step = 1.1 / fps;
       await this._seekTo(t0 + step);
       const t1 = this.video.currentTime;
 
       const moved = t1 - t0;
       const expected = 1 / fps;
-      // 실제 착지점이 해당 fps의 1프레임 간격과 2ms 이내면 일치
       if (moved > 0.0001 && Math.abs(moved - expected) < 0.002) {
         return fps;
       }
@@ -114,6 +114,7 @@ export class VideoController {
 
   drawCurrentFrame() {
     if (this.video.readyState >= 2) {
+      this.ctx.imageSmoothingEnabled = false;
       this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
     }
   }
@@ -134,6 +135,7 @@ export class VideoController {
         resolve();
         return;
       }
+
       const onSeeked = () => {
         this.video.removeEventListener('seeked', onSeeked);
         this.drawCurrentFrame();
@@ -155,7 +157,7 @@ export class VideoController {
 }
 
 function _nearestStdFps(detected) {
-  const standard = [24, 25, 30, 60, 120, 240];
+  const standard = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60, 120, 240];
   return standard.reduce((p, c) =>
     Math.abs(c - detected) < Math.abs(p - detected) ? c : p
   );

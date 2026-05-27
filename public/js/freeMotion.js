@@ -41,7 +41,8 @@ export function initFreeMotion(showScreen) {
   graphs      = new GraphRenderer();
   vc = new VideoController($('fm-video'), $('fm-canvas'), (fps, auto) => {
     $('fm-capture-fps').value = fps;
-    $('fm-fps-status').textContent = auto ? `자동 감지: ${fps}fps` : `기본값: ${fps}fps`;
+    const fpsStr = Number.isInteger(fps) ? `${fps}` : fps.toFixed(3);
+    $('fm-fps-status').textContent = auto ? `자동 감지: ${fpsStr}fps` : `기본값: ${fpsStr}fps`;
     _slider();
   });
   _bindUpload();
@@ -72,7 +73,7 @@ function _bindUpload() {
     e.target.value = '';
   });
   $('fm-capture-fps').addEventListener('change', e => {
-    const fps = Math.max(1, parseInt(e.target.value) || 1);
+    const fps = Math.max(1, parseFloat(e.target.value) || 1);
     e.target.value = fps;
     vc.setFps(fps);
     _slider();
@@ -170,7 +171,7 @@ function _bindTrack() {
     await vc.seekToFrame(Number(e.target.value)); _redraw(); _frameInfo();
   });
   $('fm-track-fps').addEventListener('change', e => {
-    const fps = Math.max(1, parseInt(e.target.value) || 1);
+    const fps = Math.max(1, parseFloat(e.target.value) || 1);
     e.target.value = fps; $('fm-capture-fps').value = fps;
     vc.setFps(fps); tracker.recomputeTimes(fps); _slider(); _interval();
   });
@@ -397,7 +398,7 @@ function _down(e) {
   }
 
   if (st.mode === 'tracking') {
-    const fps  = Math.max(1, parseInt($('fm-track-fps').value) || 30);
+    const fps  = Math.max(1, parseFloat($('fm-track-fps').value) || 30);
     const tSec = vc.currentFrame / fps;
     tracker.addPoint(x, y, vc.currentFrame, tSec);
     _redraw(); return;
@@ -502,7 +503,7 @@ async function _runAuto(resume) {
   if (!autoTracker.seeded) { alert('먼저 물체를 선택하세요.'); return; }
   const interval  = Math.max(1, parseInt($('fm-auto-interval').value)  || 1);
   const maxPoints = Math.max(1, parseInt($('fm-auto-maxframes').value) || 20);
-  const fps       = Math.max(1, parseInt($('fm-track-fps').value)      || 30);
+  const fps       = Math.max(1, parseFloat($('fm-track-fps').value)    || 30);
 
   let startFrame;
   if (resume) {
@@ -834,7 +835,7 @@ function _frameInfo() {
   _interval();
 }
 function _interval() {
-  const cap = Math.max(1, parseInt($('fm-track-fps').value) || 30);
+  const cap = Math.max(1, parseFloat($('fm-track-fps').value) || 30);
   $('fm-track-interval').textContent = `1프레임=${(1 / cap).toFixed(4)}s`;
 }
 function _syncFps() {

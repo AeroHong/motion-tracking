@@ -191,18 +191,19 @@ async function loadVideo(file, type) {
 
 function onFpsDetected(type, fps, auto) {
   $(`${type}-capture-fps`).value = fps;
-  $(`${type}-fps-status`).textContent = auto ? `자동 감지: ${fps}fps` : `기본값: ${fps}fps`;
+  const fpsStr = Number.isInteger(fps) ? `${fps}` : fps.toFixed(3);
+  $(`${type}-fps-status`).textContent = auto ? `자동 감지: ${fpsStr}fps` : `기본값: ${fpsStr}fps`;
 }
 
 $('ff-capture-fps').addEventListener('change', e => {
-  const fps = Math.max(1, parseInt(e.target.value) || 1);
+  const fps = Math.max(1, parseFloat(e.target.value) || 1);
   e.target.value = fps;
   ffController.setFps(fps);
   updateFrameSlider('ff');
   if (activeVideo === 'ff') updateTrackCaptureFps();
 });
 $('proj-capture-fps').addEventListener('change', e => {
-  const fps = Math.max(1, parseInt(e.target.value) || 1);
+  const fps = Math.max(1, parseFloat(e.target.value) || 1);
   e.target.value = fps;
   projController.setFps(fps);
   updateFrameSlider('proj');
@@ -264,7 +265,7 @@ const activeCalibration = () => activeVideo === 'ff' ? ffCalibration    : projCa
 
 // 시간 보정: tSec = 프레임번호 / 촬영fps
 function computeTSec(ctrl, type) {
-  const captureFps = Math.max(1, parseInt($(`${type}-capture-fps`).value) || ctrl.fps);
+  const captureFps = Math.max(1, parseFloat($(`${type}-capture-fps`).value) || ctrl.fps);
   return ctrl.currentFrame / captureFps;
 }
 
@@ -318,7 +319,7 @@ $('frame-slider').addEventListener('input', async e => {
 });
 
 $('track-capture-fps').addEventListener('change', e => {
-  const newFps = Math.max(1, parseInt(e.target.value) || 1);
+  const newFps = Math.max(1, parseFloat(e.target.value) || 1);
   e.target.value = newFps;
   $(`${activeVideo}-capture-fps`).value = newFps;
   activeController().setFps(newFps);
@@ -358,7 +359,7 @@ function updateTrackCaptureFps() {
 }
 
 function updateTrackInterval() {
-  const cap = Math.max(1, parseInt($('track-capture-fps')?.value) || 30);
+  const cap = Math.max(1, parseFloat($('track-capture-fps')?.value) || 30);
   const el = $('track-interval');
   if (el) el.textContent = `1프레임=${(1 / cap).toFixed(4)}s`;
 }
