@@ -27,7 +27,16 @@ export class VideoController {
 
   _detectFps() {
     return new Promise(async resolve => {
-      // 1순위: 시크 기반 감지 (디스플레이 주사율에 무관, 240fps 정확 감지)
+      // 1순위: requestVideoFrameCallback — 실제 프레임 타임스탬프 측정 (가장 정확)
+      if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        try {
+          await this._detectFpsByFrameCallback();
+          resolve();
+          return;
+        } catch (_) {}
+      }
+
+      // 2순위: 시크 기반 감지 (rVFC 미지원 환경 fallback)
       try {
         const fps = await this._detectFpsBySeeking();
         this._applyFps(fps, true);
@@ -36,13 +45,14 @@ export class VideoController {
         return;
       } catch (_) {}
 
-      // 2순위: requestVideoFrameCallback 샘플링 (60Hz 이하 영상 fallback)
-      if (!('requestVideoFrameCallback' in HTMLVideoElement.prototype)) {
-        this.onFpsDetected(this.fps, false);
-        resolve();
-        return;
-      }
+      // 최종 fallback: 기본값 유지
+      this.onFpsDetected(this.fps, false);
+      resolve();
+    });
+  }
 
+  _detectFpsByFrameCallback() {
+    return new Promise((resolve, reject) => {
       const timestamps = [];
       const SAMPLE = 20;
       const onFrame = (now, meta) => {
@@ -56,8 +66,8 @@ export class VideoController {
           for (let i = 1; i < timestamps.length; i++)
             intervals.push(timestamps[i] - timestamps[i - 1]);
           const avg = intervals.reduce((a, b) => a + b) / intervals.length;
-          const detected = Math.round(1 / avg);
-          const fps = _nearestStdFps(detected);
+          if (avg <= 0 || avg > 1) { reject(new Error('bad intervals')); return; }
+          const fps = _nearestStdFps(1 / avg);
           this._applyFps(fps, true);
           resolve();
         }
@@ -67,10 +77,7 @@ export class VideoController {
       this.video.muted = true;
       this.video.play().then(() => {
         this.video.requestVideoFrameCallback(onFrame);
-      }).catch(() => {
-        this.onFpsDetected(this.fps, false);
-        resolve();
-      });
+      }).catch(reject);
     });
   }
 
