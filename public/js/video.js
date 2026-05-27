@@ -18,16 +18,24 @@ export class VideoController {
       this.video.onloadedmetadata = () => {
         this.canvas.width = this.video.videoWidth;
         this.canvas.height = this.video.videoHeight;
-        this._detectFps().then(() => resolve());
+        this._detectFps(file).then(() => resolve());
       };
       this.video.onerror = reject;
       this.video.load();
     });
   }
 
-  _detectFps() {
+  _detectFps(file) {
     return new Promise(async resolve => {
-      // 1순위: requestVideoFrameCallback — 실제 프레임 타임스탬프 측정 (가장 정확)
+      // 1순위: MP4/MOV 컨테이너 메타데이터 직접 파싱 (가장 정확, 재생 불필요)
+      try {
+        const fps = await _readFpsFromFile(file);
+        this._applyFps(fps, true);
+        resolve();
+        return;
+      } catch (_) {}
+
+      // 2순위: requestVideoFrameCallback — 실제 프레임 타임스탬프 측정
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
         try {
           await this._detectFpsByFrameCallback();
@@ -36,7 +44,7 @@ export class VideoController {
         } catch (_) {}
       }
 
-      // 2순위: 시크 기반 감지 (rVFC 미지원 환경 fallback)
+      // 3순위: 시크 기반 감지
       try {
         const fps = await this._detectFpsBySeeking();
         this._applyFps(fps, true);
@@ -168,4 +176,100 @@ function _nearestStdFps(detected) {
   return standard.reduce((p, c) =>
     Math.abs(c - detected) < Math.abs(p - detected) ? c : p
   );
+}
+
+// MP4/MOV 컨테이너에서 fps 직접 파싱
+// 최상위 박스를 헤더만 읽으며 순회 → moov 위치 파악 → moov만 읽어서 파싱
+// (moov가 파일 끝에 있어도 전체를 읽지 않음)
+async function _readFpsFromFile(file) {
+  // 1단계: 최상위 박스 헤더를 하나씩 읽으며 moov 위치 탐색
+  let offset = 0;
+  let moovStart = -1;
+  let moovSize = 0;
+
+  while (offset + 8 <= file.size) {
+    const headerBuf = await file.slice(offset, offset + 16).arrayBuffer();
+    const hdv = new DataView(headerBuf);
+
+    let size = hdv.getUint32(0, false);
+    const type = String.fromCharCode(
+      hdv.getUint8(4), hdv.getUint8(5), hdv.getUint8(6), hdv.getUint8(7)
+    );
+
+    if (size === 1) {
+      // extended 64-bit size (상위 32비트는 무시 — 실용적 영상 크기에서 충분)
+      size = hdv.getUint32(12, false);
+    }
+    if (size === 0) size = file.size - offset;
+    if (size < 8) throw new Error('invalid box');
+
+    if (type === 'moov') {
+      moovStart = offset;
+      moovSize  = size;
+      break;
+    }
+    offset += size;
+  }
+
+  if (moovStart < 0) throw new Error('moov not found');
+
+  // 2단계: moov 박스만 읽어서 파싱
+  const buf = await file.slice(moovStart, moovStart + moovSize).arrayBuffer();
+  const dv  = new DataView(buf);
+
+  const u32 = off => dv.getUint32(off, false);
+  const str = off => String.fromCharCode(
+    dv.getUint8(off), dv.getUint8(off+1), dv.getUint8(off+2), dv.getUint8(off+3)
+  );
+
+  function findBox(start, end, type) {
+    let off = start;
+    const limit = Math.min(end, dv.byteLength);
+    while (off + 8 <= limit) {
+      let size = u32(off);
+      const t   = str(off + 4);
+      if (size === 0) size = limit - off;
+      if (size < 8) break;
+      const boxEnd = Math.min(off + size, limit);
+      if (t === type) return { dataStart: off + 8, end: boxEnd };
+      off += size;
+    }
+    return null;
+  }
+
+  // moov 박스 내부는 offset 8부터 시작 (박스 헤더 8바이트 제외)
+  let trakOff = 8;
+  while (trakOff < buf.byteLength) {
+    const trak = findBox(trakOff, buf.byteLength, 'trak');
+    if (!trak) break;
+    trakOff = trak.end;
+
+    const mdia = findBox(trak.dataStart, trak.end, 'mdia');
+    if (!mdia) continue;
+
+    const hdlr = findBox(mdia.dataStart, mdia.end, 'hdlr');
+    if (!hdlr || str(hdlr.dataStart + 8) !== 'vide') continue;
+
+    const mdhd = findBox(mdia.dataStart, mdia.end, 'mdhd');
+    if (!mdhd) continue;
+    const ver       = dv.getUint8(mdhd.dataStart);
+    const timescale = ver === 1 ? u32(mdhd.dataStart + 20) : u32(mdhd.dataStart + 12);
+    if (!timescale) continue;
+
+    const minf = findBox(mdia.dataStart, mdia.end, 'minf');
+    if (!minf) continue;
+    const stbl = findBox(minf.dataStart, minf.end, 'stbl');
+    if (!stbl) continue;
+    const stts = findBox(stbl.dataStart, stbl.end, 'stts');
+    if (!stts) continue;
+
+    const entryCount  = u32(stts.dataStart + 4);
+    if (!entryCount) continue;
+    const sampleDelta = u32(stts.dataStart + 12);
+    if (!sampleDelta) continue;
+
+    return _nearestStdFps(timescale / sampleDelta);
+  }
+
+  throw new Error('video fps not found in moov');
 }
