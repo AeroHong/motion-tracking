@@ -268,8 +268,10 @@ function _bindTrack() {
   $('fm-btn-start-auto').addEventListener('click', () => _runAuto(false));
   $('fm-btn-resume-auto').addEventListener('click', () => _runAuto(true));
 
-  // 리사이즈
+  // 리사이즈 (4K·모바일·방향전환 대응)
   window.addEventListener('resize', _fit);
+  window.addEventListener('orientationchange', () => setTimeout(_fit, 200));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', _fit);
   if (window.ResizeObserver) {
     const trackMain = $('screen-free-track')?.querySelector('.track-main');
     if (trackMain) new ResizeObserver(_fit).observe(trackMain);
@@ -856,9 +858,12 @@ function _fit() {
   const wrapper   = $('fm-canvas-wrapper');
   const cvs       = $('fm-canvas');
   if (!trackMain || !wrapper || !cvs.width || !cvs.height) return;
-  if (trackMain.clientWidth === 0) return; // 화면이 숨겨진 상태
 
-  // track-main 안에서 canvas-wrapper가 아닌 visible 요소 높이 합산
+  const availW = trackMain.clientWidth;
+  if (!availW) return; // 화면이 숨겨진 상태
+
+  const headerH = document.querySelector('header')?.offsetHeight || 0;
+
   let siblingH = 0;
   for (const el of trackMain.children) {
     if (el === wrapper) continue;
@@ -866,9 +871,8 @@ function _fit() {
     siblingH += el.offsetHeight;
   }
 
-  const availW = trackMain.clientWidth;
-  const availH = trackMain.clientHeight - siblingH;
-  if (availW <= 0 || availH <= 0) return;
+  const availH = window.innerHeight - headerH - siblingH;
+  if (availH <= 0) return;
 
   const scale = Math.min(availW / cvs.width, availH / cvs.height);
   cvs.style.width  = Math.round(cvs.width  * scale) + 'px';

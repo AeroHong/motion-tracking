@@ -277,13 +277,20 @@ $('btn-back-upload').addEventListener('click', () => {
 });
 
 // ── 화면 맞춤 ─────────────────────────────────────────
+// trackMain.clientHeight 대신 window.innerHeight 기준으로 계산:
+// DOM 레이아웃 높이가 4K·모바일 등에서 뷰포트를 초과할 수 있기 때문.
 function fitCanvases() {
   const trackMain = document.querySelector('#screen-track .track-main');
   const wrapper   = document.querySelector('#screen-track .canvas-wrapper');
   if (!wrapper || !trackMain) return;
-  if (trackMain.clientWidth === 0) return; // 화면이 숨겨진 상태
 
-  // track-main 안에서 canvas-wrapper가 아닌 visible 요소 높이 합산
+  const availW = trackMain.clientWidth;
+  if (!availW) return; // 화면이 숨겨진 상태
+
+  // 헤더 높이
+  const headerH = document.querySelector('header')?.offsetHeight || 0;
+
+  // canvas-wrapper를 제외한 visible 형제 요소 높이 합산
   let siblingH = 0;
   for (const el of trackMain.children) {
     if (el === wrapper) continue;
@@ -291,9 +298,9 @@ function fitCanvases() {
     siblingH += el.offsetHeight;
   }
 
-  const availW = trackMain.clientWidth;
-  const availH = trackMain.clientHeight - siblingH;
-  if (availW <= 0 || availH <= 0) return;
+  // 실제 뷰포트 기준 가용 높이 (4K·모바일 모두 정확)
+  const availH = window.innerHeight - headerH - siblingH;
+  if (availH <= 0) return;
 
   [ffCanvas, projCanvas].forEach(canvas => {
     if (!canvas.width || !canvas.height) return;
@@ -303,8 +310,12 @@ function fitCanvases() {
   });
 }
 
-// 창 크기 변경 시 재조정
+// 창 크기 변경 / 모바일 방향 전환 시 재조정
 window.addEventListener('resize', fitCanvases);
+window.addEventListener('orientationchange', () => setTimeout(fitCanvases, 200));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fitCanvases);
+}
 
 // track-main 크기 변경 감지 (패널 열림/닫힘, 화면 전환 등)
 if (window.ResizeObserver) {

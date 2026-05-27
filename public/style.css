@@ -308,6 +308,7 @@ input[type="file"] {
 .track-main .canvas-wrapper {
   flex: 1;
   min-height: 0;
+  height: auto !important; /* 미디어 쿼리 vh 고정값 무력화 — JS가 canvas 크기 직접 제어 */
 }
 
 .canvas-wrapper {
