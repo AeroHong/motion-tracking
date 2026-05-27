@@ -278,16 +278,26 @@ $('btn-back-upload').addEventListener('click', () => {
 
 // ── 화면 맞춤 ─────────────────────────────────────────
 function fitCanvases() {
-  // wrapper는 두 캔버스가 공유 — 하나만 보이는 상태여도 wrapper 크기는 동일
-  const wrapper = document.querySelector('.canvas-wrapper');
-  if (!wrapper) return;
-  const ww = wrapper.clientWidth;
-  const wh = wrapper.clientHeight;
-  if (!ww || !wh) return; // 숨겨진 화면이면 0 → 건너뜀
+  const trackMain = document.querySelector('#screen-track .track-main');
+  const wrapper   = document.querySelector('#screen-track .canvas-wrapper');
+  if (!wrapper || !trackMain) return;
+  if (trackMain.clientWidth === 0) return; // 화면이 숨겨진 상태
+
+  // track-main 안에서 canvas-wrapper가 아닌 visible 요소 높이 합산
+  let siblingH = 0;
+  for (const el of trackMain.children) {
+    if (el === wrapper) continue;
+    if (el.classList.contains('hidden')) continue;
+    siblingH += el.offsetHeight;
+  }
+
+  const availW = trackMain.clientWidth;
+  const availH = trackMain.clientHeight - siblingH;
+  if (availW <= 0 || availH <= 0) return;
 
   [ffCanvas, projCanvas].forEach(canvas => {
     if (!canvas.width || !canvas.height) return;
-    const scale = Math.min(ww / canvas.width, wh / canvas.height);
+    const scale = Math.min(availW / canvas.width, availH / canvas.height);
     canvas.style.width  = Math.round(canvas.width  * scale) + 'px';
     canvas.style.height = Math.round(canvas.height * scale) + 'px';
   });
@@ -296,10 +306,10 @@ function fitCanvases() {
 // 창 크기 변경 시 재조정
 window.addEventListener('resize', fitCanvases);
 
-// canvas-wrapper 크기 변경 감지 (패널 열림/닫힘 등)
+// track-main 크기 변경 감지 (패널 열림/닫힘, 화면 전환 등)
 if (window.ResizeObserver) {
-  new ResizeObserver(fitCanvases)
-    .observe(document.querySelector('.canvas-wrapper'));
+  const trackMain = document.querySelector('#screen-track .track-main');
+  if (trackMain) new ResizeObserver(fitCanvases).observe(trackMain);
 }
 
 // ── 트래킹 화면 헬퍼 ──────────────────────────────────

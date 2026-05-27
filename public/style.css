@@ -303,11 +303,11 @@ input[type="file"] {
   min-width: 0;
 }
 
-/* 캔버스: 나머지 공간 전부 차지 */
+/* 트래킹 화면: 캔버스 영역이 frame-nav 위 남은 공간 전부 차지 */
+/* JS(fitCanvases)가 canvas CSS 크기를 동적 계산하므로 CSS height 제약 없음 */
 .track-main .canvas-wrapper {
   flex: 1;
-  height: auto;   /* 미디어 쿼리 vh 고정값 무력화 */
-  min-height: 0;  /* flex 기본값 min-height:auto 가 캔버스 원본 크기로 팽창하는 것 방지 */
+  min-height: 0;
 }
 
 .canvas-wrapper {
@@ -321,9 +321,6 @@ input[type="file"] {
 .canvas-wrapper canvas {
   display: block;
   touch-action: none;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
 }
 
 .tab-btn {

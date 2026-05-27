@@ -270,7 +270,10 @@ function _bindTrack() {
 
   // 리사이즈
   window.addEventListener('resize', _fit);
-  if (window.ResizeObserver) new ResizeObserver(_fit).observe($('fm-canvas-wrapper'));
+  if (window.ResizeObserver) {
+    const trackMain = $('screen-free-track')?.querySelector('.track-main');
+    if (trackMain) new ResizeObserver(_fit).observe(trackMain);
+  }
 }
 
 // ─── 모드 관리 ───────────────────────────────────────────────
@@ -849,12 +852,25 @@ async function _step(d) {
   _redraw(); _frameInfo();
 }
 function _fit() {
-  const wrapper = $('fm-canvas-wrapper');
-  if (!wrapper) return;
-  const cvs = $('fm-canvas');
-  const ww = wrapper.clientWidth, wh = wrapper.clientHeight;
-  if (!ww || !wh || !cvs.width || !cvs.height) return;
-  const scale = Math.min(ww / cvs.width, wh / cvs.height);
+  const trackMain = $('screen-free-track')?.querySelector('.track-main');
+  const wrapper   = $('fm-canvas-wrapper');
+  const cvs       = $('fm-canvas');
+  if (!trackMain || !wrapper || !cvs.width || !cvs.height) return;
+  if (trackMain.clientWidth === 0) return; // 화면이 숨겨진 상태
+
+  // track-main 안에서 canvas-wrapper가 아닌 visible 요소 높이 합산
+  let siblingH = 0;
+  for (const el of trackMain.children) {
+    if (el === wrapper) continue;
+    if (el.classList.contains('hidden')) continue;
+    siblingH += el.offsetHeight;
+  }
+
+  const availW = trackMain.clientWidth;
+  const availH = trackMain.clientHeight - siblingH;
+  if (availW <= 0 || availH <= 0) return;
+
+  const scale = Math.min(availW / cvs.width, availH / cvs.height);
   cvs.style.width  = Math.round(cvs.width  * scale) + 'px';
   cvs.style.height = Math.round(cvs.height * scale) + 'px';
 }
