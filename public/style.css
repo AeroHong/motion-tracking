@@ -898,6 +898,43 @@ input[type="file"] {
 }
 .btn-install:active { background: rgba(74,158,255,0.3); }
 
+/* ── PWA 업데이트 배너 ── */
+#update-banner {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--accent);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  z-index: 9999;
+  white-space: nowrap;
+  animation: bannerSlideUp 0.35s cubic-bezier(.22,.68,0,1.2) both;
+}
+#update-banner button {
+  background: #fff;
+  color: var(--accent);
+  border: none;
+  border-radius: 14px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: auto;
+  cursor: pointer;
+}
+#update-banner button:active { opacity: 0.8; }
+@keyframes bannerSlideUp {
+  from { transform: translateX(-50%) translateY(60px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+}
+
 /* ── 푸터 ── */
 .app-footer {
   display: flex;
