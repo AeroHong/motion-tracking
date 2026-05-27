@@ -29,8 +29,9 @@ if (_isIOS && !_isStandalone) {
 import { initAuth, login, logout, db } from './auth.js';
 import { doc, getDoc, setDoc }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import { ZoomController } from './zoomController.js';
-import { initFreeMotion }     from './freeMotion.js';
+import { ZoomController }  from './zoomController.js';
+import { makeDraggable }   from './utils.js';
+import { initFreeMotion }  from './freeMotion.js';
 import { VideoController }    from './video.js';
 import { Calibration }        from './calibration.js';
 import { Tracker }            from './tracker.js';
@@ -316,6 +317,8 @@ window.addEventListener('orientationchange', () => setTimeout(fitCanvases, 200))
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', fitCanvases);
 }
+
+makeDraggable($('auto-panel'));
 
 // track-main 크기 변경 감지 (패널 열림/닫힘, 화면 전환 등)
 if (window.ResizeObserver) {

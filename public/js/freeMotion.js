@@ -12,6 +12,7 @@ import { generateFreeMotionReport,
 import { saveFreeMotionReportToCloud,
          loadAllFreeMotionReports,
          deleteFreeMotionReport }             from './saveReport.js';
+import { makeDraggable }                     from './utils.js';
 
 const $ = id => document.getElementById(id);
 
@@ -276,6 +277,8 @@ function _bindTrack() {
     const trackMain = $('screen-free-track')?.querySelector('.track-main');
     if (trackMain) new ResizeObserver(_fit).observe(trackMain);
   }
+
+  makeDraggable($('fm-auto-panel'));
 }
 
 // ─── 모드 관리 ───────────────────────────────────────────────

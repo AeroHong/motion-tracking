@@ -99,8 +99,21 @@
 
       <!-- 개발 현황 -->
       <details class="tip-card changelog-card">
-        <summary>📋 개발 현황 <span class="version-chip">v1.4</span></summary>
+        <summary>📋 개발 현황 <span class="version-chip">v1.5</span></summary>
         <div class="changelog">
+          <div class="cl-entry">
+            <span class="cl-ver">v1.5</span>
+            <span class="cl-date">2026.05.27</span>
+            <ul class="cl-items">
+              <li>반응형 캔버스 — 화면 크기에 맞게 자동 축소 (4K 전자칠판·태블릿·모바일 대응)</li>
+              <li>세로 영상·방향 전환·모바일 주소창 숨김 시 캔버스 재조정 (window.innerHeight 기준)</li>
+              <li>자동 추적 패널을 캔버스 위 반투명 오버레이로 전환 — 캔버스 크기 변화 없음</li>
+              <li>자동 추적 패널 드래그 이동 가능 (마우스·터치 모두 지원)</li>
+              <li>트래킹 화면 좌측 사이드바 레이아웃 — 낙하 시작점 가림 문제 해결</li>
+              <li>촬영 체크리스트 추가 (15개 항목, 계정별 Firestore 저장)</li>
+              <li>MP4/MOV 컨테이너 직접 파싱으로 fps 정밀 감지 (NTSC 29.97·59.94 등)</li>
+            </ul>
+          </div>
           <div class="cl-entry">
             <span class="cl-ver">v1.4</span>
             <span class="cl-date">2026.05</span>
@@ -236,42 +249,43 @@
     <!-- 오른쪽 메인 -->
     <div class="track-main">
 
-      <!-- 자동 추적 패널 -->
-      <div id="auto-panel" class="hidden auto-panel">
-        <div class="auto-panel-row">
-          <span id="auto-seed-status" class="auto-seed-status">추적할 물체를 박스로 드래그하여 선택하세요</span>
-        </div>
-        <div class="auto-panel-row">
-          <label class="auto-label">프레임 간격
-            <input type="number" id="auto-interval" value="1" min="1" max="30" class="auto-input">
-          </label>
-          <label class="auto-label">최대 점 개수
-            <input type="number" id="auto-maxframes" value="20" min="1" max="60" class="auto-input">
-          </label>
-          <button id="btn-start-auto"  class="btn-primary"   disabled>▶ 추적 시작</button>
-          <button id="btn-stop-auto"   class="btn-ghost"    disabled>■ 중단</button>
-          <button id="btn-resume-auto" class="btn-secondary hidden">🔄 이어서 추적</button>
-        </div>
-        <div id="auto-progress-wrap" class="hidden auto-progress-wrap">
-          <span class="auto-progress-title">진행</span>
-          <div class="auto-progress-track">
-            <div id="auto-progress-bar" class="auto-progress-bar" style="width:0%"></div>
-          </div>
-          <span id="auto-progress-label" class="auto-progress-label">0 / 0</span>
-        </div>
-        <div id="auto-conf-bar-wrap" class="hidden auto-progress-wrap">
-          <span class="auto-progress-title">신뢰도</span>
-          <div class="auto-progress-track">
-            <div id="auto-conf-bar" class="auto-progress-bar" style="width:100%;background:#66bb6a"></div>
-          </div>
-          <span id="auto-conf-label" class="auto-progress-label">-</span>
-        </div>
-      </div>
-
-      <!-- 캔버스 영역 -->
+      <!-- 캔버스 영역 (자동 패널은 캔버스 위 오버레이) -->
       <div class="canvas-wrapper">
         <canvas id="ff-canvas"></canvas>
         <canvas id="proj-canvas" class="hidden-canvas"></canvas>
+
+        <!-- 자동 추적 패널 — 캔버스 위 반투명 오버레이 -->
+        <div id="auto-panel" class="hidden auto-panel">
+          <div class="auto-panel-handle">
+            <span class="drag-grip">⠿</span>
+            <span id="auto-seed-status" class="auto-seed-status">추적할 물체를 박스로 드래그하여 선택하세요</span>
+          </div>
+          <div class="auto-panel-row">
+            <label class="auto-label">프레임 간격
+              <input type="number" id="auto-interval" value="1" min="1" max="30" class="auto-input">
+            </label>
+            <label class="auto-label">최대 점 개수
+              <input type="number" id="auto-maxframes" value="20" min="1" max="60" class="auto-input">
+            </label>
+            <button id="btn-start-auto"  class="btn-primary"   disabled>▶ 추적 시작</button>
+            <button id="btn-stop-auto"   class="btn-ghost"    disabled>■ 중단</button>
+            <button id="btn-resume-auto" class="btn-secondary hidden">🔄 이어서 추적</button>
+          </div>
+          <div id="auto-progress-wrap" class="hidden auto-progress-wrap">
+            <span class="auto-progress-title">진행</span>
+            <div class="auto-progress-track">
+              <div id="auto-progress-bar" class="auto-progress-bar" style="width:0%"></div>
+            </div>
+            <span id="auto-progress-label" class="auto-progress-label">0 / 0</span>
+          </div>
+          <div id="auto-conf-bar-wrap" class="hidden auto-progress-wrap">
+            <span class="auto-progress-title">신뢰도</span>
+            <div class="auto-progress-track">
+              <div id="auto-conf-bar" class="auto-progress-bar" style="width:100%;background:#66bb6a"></div>
+            </div>
+            <span id="auto-conf-label" class="auto-progress-label">-</span>
+          </div>
+        </div>
       </div>
 
       <!-- 프레임 탐색 -->
@@ -404,41 +418,42 @@
     <!-- 오른쪽 메인 -->
     <div class="track-main">
 
-      <!-- 자동 추적 패널 -->
-      <div id="fm-auto-panel" class="hidden auto-panel">
-        <div class="auto-panel-row">
-          <span id="fm-auto-seed" class="auto-seed-status">추적할 물체를 박스로 드래그하세요</span>
-        </div>
-        <div class="auto-panel-row">
-          <label class="auto-label">프레임 간격
-            <input type="number" id="fm-auto-interval" value="1" min="1" max="30" class="auto-input">
-          </label>
-          <label class="auto-label">최대 점 개수
-            <input type="number" id="fm-auto-maxframes" value="20" min="1" max="60" class="auto-input">
-          </label>
-          <button id="fm-btn-start-auto"  class="btn-primary"    disabled>▶ 추적 시작</button>
-          <button id="fm-btn-stop-auto"   class="btn-ghost"     disabled>■ 중단</button>
-          <button id="fm-btn-resume-auto" class="btn-secondary hidden">🔄 이어서 추적</button>
-        </div>
-        <div id="fm-auto-prog-wrap" class="hidden auto-progress-wrap">
-          <span class="auto-progress-title">진행</span>
-          <div class="auto-progress-track">
-            <div id="fm-auto-prog-bar" class="auto-progress-bar" style="width:0%"></div>
-          </div>
-          <span id="fm-auto-prog-label" class="auto-progress-label">0 / 0</span>
-        </div>
-        <div id="fm-auto-conf-wrap" class="hidden auto-progress-wrap">
-          <span class="auto-progress-title">신뢰도</span>
-          <div class="auto-progress-track">
-            <div id="fm-auto-conf-bar" class="auto-progress-bar" style="width:100%;background:#66bb6a"></div>
-          </div>
-          <span id="fm-auto-conf-label" class="auto-progress-label">-</span>
-        </div>
-      </div>
-
-      <!-- 캔버스 -->
+      <!-- 캔버스 (자동 패널은 캔버스 위 오버레이) -->
       <div class="canvas-wrapper" id="fm-canvas-wrapper">
         <canvas id="fm-canvas"></canvas>
+
+        <!-- 자동 추적 패널 — 캔버스 위 반투명 오버레이 -->
+        <div id="fm-auto-panel" class="hidden auto-panel">
+          <div class="auto-panel-handle">
+            <span class="drag-grip">⠿</span>
+            <span id="fm-auto-seed" class="auto-seed-status">추적할 물체를 박스로 드래그하세요</span>
+          </div>
+          <div class="auto-panel-row">
+            <label class="auto-label">프레임 간격
+              <input type="number" id="fm-auto-interval" value="1" min="1" max="30" class="auto-input">
+            </label>
+            <label class="auto-label">최대 점 개수
+              <input type="number" id="fm-auto-maxframes" value="20" min="1" max="60" class="auto-input">
+            </label>
+            <button id="fm-btn-start-auto"  class="btn-primary"    disabled>▶ 추적 시작</button>
+            <button id="fm-btn-stop-auto"   class="btn-ghost"     disabled>■ 중단</button>
+            <button id="fm-btn-resume-auto" class="btn-secondary hidden">🔄 이어서 추적</button>
+          </div>
+          <div id="fm-auto-prog-wrap" class="hidden auto-progress-wrap">
+            <span class="auto-progress-title">진행</span>
+            <div class="auto-progress-track">
+              <div id="fm-auto-prog-bar" class="auto-progress-bar" style="width:0%"></div>
+            </div>
+            <span id="fm-auto-prog-label" class="auto-progress-label">0 / 0</span>
+          </div>
+          <div id="fm-auto-conf-wrap" class="hidden auto-progress-wrap">
+            <span class="auto-progress-title">신뢰도</span>
+            <div class="auto-progress-track">
+              <div id="fm-auto-conf-bar" class="auto-progress-bar" style="width:100%;background:#66bb6a"></div>
+            </div>
+            <span id="fm-auto-conf-label" class="auto-progress-label">-</span>
+          </div>
+        </div>
       </div>
 
       <!-- 프레임 탐색 -->
@@ -576,7 +591,7 @@
 
   <!-- ── 푸터 ── -->
   <footer id="app-footer" class="app-footer hidden">
-    <span class="footer-title">⚗️ Motion Tracker <span class="footer-ver">v1.4</span></span>
+    <span class="footer-title">⚗️ Motion Tracker <span class="footer-ver">v1.5</span></span>
     <span class="footer-sep">|</span>
     <span>선유고등학교 홍창기 개발</span>
     <span class="footer-sep">|</span>
@@ -621,7 +636,7 @@
     <div class="modal-box about-box">
       <button id="about-close" class="modal-close-btn">✕ 닫기</button>
       <h2>⚗️ Motion Tracker</h2>
-      <p class="about-ver">버전 1.4 · 2026</p>
+      <p class="about-ver">버전 1.5 · 2026.05.27</p>
       <p>자유낙하 &amp; 수평투사 영상에서 물체의 위치를 프레임별로 추적하고, 그래프·보고서를 자동 생성하는 수행평가 분석 도구입니다.</p>
       <ul class="about-list">
         <li>🎞️ 수동 / NCC 자동 물체 추적</li>
