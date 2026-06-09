@@ -61,6 +61,28 @@ header {
 header h1 { font-size: 18px; color: var(--primary); }
 #user-name { font-size: 13px; color: var(--text-dim); margin-right: 10px; }
 
+.btn-force-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, transform 0.3s;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.btn-force-refresh:hover { color: var(--primary); border-color: var(--primary); }
+.btn-force-refresh.spinning { animation: fr-spin 0.8s linear infinite; pointer-events: none; opacity: 0.6; }
+@keyframes fr-spin { to { transform: rotate(360deg); } }
+
 /* ── 로그인 ── */
 #screen-login {
   display: flex;
@@ -405,10 +427,9 @@ input[type="file"] {
 }
 
 .slit-fringe-item {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 4px 5px;
   border-radius: 6px;
   background: var(--bg);
@@ -418,22 +439,30 @@ input[type="file"] {
 }
 .slit-fringe-item.selected { border-color: #00e5ff; background: rgba(0,229,255,0.07); }
 .slit-fringe-item.center   { border-color: #ff6b35; background: rgba(255,107,53,0.07); }
+.slit-fringe-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+}
 
-.slit-fringe-label { font-weight: 700; font-size: 11px; }
+.slit-fringe-label { font-weight: 700; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slit-fringe-label.center-label { color: #ff6b35; }
-.slit-fringe-pos   { color: var(--text-dim); font-size: 10px; }
-.slit-fringe-btns  { display: flex; gap: 1px; }
+.slit-fringe-pos   { color: var(--text-dim); font-size: 10px; flex: 1; }
+.slit-fringe-btns  { display: flex; gap: 1px; flex-shrink: 0; }
 
 .slit-center-btn, .slit-del-btn {
   background: none; border: none;
-  font-size: 12px; cursor: pointer;
-  padding: 2px 3px;
+  font-size: 13px; cursor: pointer;
+  padding: 2px 4px;
   border-radius: 4px;
   line-height: 1;
-  opacity: 0.55;
 }
-.slit-center-btn:hover { opacity: 1; background: rgba(255,107,53,0.15); }
-.slit-center-btn.active { opacity: 1; color: #ff6b35; }
+.slit-center-btn { color: rgba(180,180,180,0.8); }
+.slit-del-btn    { color: rgba(255,100,100,0.85); }
+.slit-center-btn:hover { color: #ff6b35; background: rgba(255,107,53,0.15); }
+.slit-center-btn.active { color: #ff6b35; }
+.slit-center-btn.active { color: #ff6b35; }
 .slit-del-btn:hover { opacity: 1; background: rgba(255,80,80,0.15); color: #ff5252; }
 
 /* 결과 영역 */
@@ -516,6 +545,29 @@ input[type="file"] {
   font-size: 12px;
   padding: 0 6px;
   text-align: center;
+}
+
+.slit-ch-btns {
+  display: flex;
+  gap: 4px;
+  margin: 2px 0;
+}
+.slit-ch-btn {
+  flex: 1;
+  min-height: 30px;
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.slit-ch-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 .sidebar-tab {
@@ -1614,3 +1666,172 @@ input[type="file"] {
   .slit-tab { padding: 0 10px; font-size: 12px; }
 }
 .about-contact a:hover { text-decoration: underline; }
+
+/* ── 이미지 편집기 모달 ───────────────────────────────────── */
+.slit-editor-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.slit-editor-modal.hidden { display: none; }
+
+.editor-panel {
+  background: var(--bg-card);
+  border-radius: 12px;
+  width: min(96vw, 920px);
+  height: min(90vh, 680px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+}
+
+.editor-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.editor-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.editor-canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+}
+
+.editor-crop-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.65);
+  color: #ffe066;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  pointer-events: none;
+  border: 1px solid rgba(255,220,50,0.4);
+}
+
+.editor-controls-panel {
+  width: 210px;
+  flex-shrink: 0;
+  padding: 14px 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.editor-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-ctrl-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.editor-ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.editor-val {
+  font-size: 12px;
+  color: var(--text-bright);
+  min-width: 38px;
+  text-align: right;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-action-btn {
+  width: 100%;
+  min-height: 34px;
+  font-size: 12px;
+  padding: 0 8px;
+}
+
+.editor-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+}
+
+/* 업로드 카드 편집 버튼 */
+.slit-edit-upload-btn {
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 10px;
+  margin-top: 4px;
+  width: 100%;
+}
+
+/* 태블릿 세로 모드: 에디터 세로 레이아웃 */
+@media (max-width: 600px) {
+  .editor-layout { flex-direction: column; }
+  .editor-controls-panel {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    gap: 10px;
+    padding: 10px;
+    max-height: 200px;
+  }
+  .editor-ctrl-group { flex: 1 1 140px; }
+  .editor-footer { flex: 1 1 100%; }
+}
+
+.editor-zoom-indicator {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid rgba(255,255,255,0.15);
+}

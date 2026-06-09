@@ -15,6 +15,31 @@ if ('serviceWorker' in navigator) {
   }).catch(() => {});
 }
 
+// ── 강제 새로고침 (캐시 삭제 + SW 재등록) ────────────────────
+document.getElementById('btn-force-refresh')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-force-refresh');
+  btn.classList.add('spinning');
+
+  try {
+    // 1) 모든 Cache Storage 삭제
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    // 2) 서비스 워커 전부 해제
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+  } catch (_) { /* 권한 없는 환경은 무시 */ }
+
+  // 3) 하드 리로드 — 플랫폼별 호환
+  // location.replace: iOS Safari PWA, 안드로이드 웹뷰에서 가장 신뢰성 높음
+  // ?_r=timestamp 쿼리: CDN/프록시 캐시도 우회
+  const url = location.origin + location.pathname + '?_r=' + Date.now();
+  location.replace(url);
+});
+
 function _showUpdateBanner() {
   if (document.getElementById('update-banner')) return;
   const b = document.createElement('div');

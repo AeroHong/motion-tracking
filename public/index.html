@@ -28,7 +28,10 @@
 
   <!-- ── 헤더 ──────────────────────────────────── -->
   <header>
-    <h1>⚗️ Motion Tracker</h1>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <h1>⚗️ Motion Tracker</h1>
+      <button id="btn-force-refresh" class="btn-force-refresh" title="강제 새로고침 (캐시 삭제)">↻</button>
+    </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <button id="btn-install" class="btn-install hidden" title="홈 화면에 앱 추가">📲 앱 설치</button>
       <span id="user-name"></span>
@@ -569,6 +572,7 @@
           <button class="btn-ghost slit-pick-btn" data-key="A">🖼️ 사진 선택</button>
           <img id="slit-preview-A" class="slit-preview hidden" src="" alt="">
           <span id="slit-filename-A" class="filename-label">선택 안 됨</span>
+          <button class="btn-secondary slit-edit-upload-btn hidden" id="slit-edit-upload-A" data-key="A">✏️ 편집</button>
         </div>
         <!-- 슬릿 B -->
         <div class="slit-upload-card" id="slit-ucard-B">
@@ -577,6 +581,7 @@
           <button class="btn-ghost slit-pick-btn" data-key="B">🖼️ 사진 선택</button>
           <img id="slit-preview-B" class="slit-preview hidden" src="" alt="">
           <span id="slit-filename-B" class="filename-label">선택 안 됨</span>
+          <button class="btn-secondary slit-edit-upload-btn hidden" id="slit-edit-upload-B" data-key="B">✏️ 편집</button>
         </div>
         <!-- 슬릿 C -->
         <div class="slit-upload-card" id="slit-ucard-C">
@@ -585,6 +590,7 @@
           <button class="btn-ghost slit-pick-btn" data-key="C">🖼️ 사진 선택</button>
           <img id="slit-preview-C" class="slit-preview hidden" src="" alt="">
           <span id="slit-filename-C" class="filename-label">선택 안 됨</span>
+          <button class="btn-secondary slit-edit-upload-btn hidden" id="slit-edit-upload-C" data-key="C">✏️ 편집</button>
         </div>
       </div>
       <button id="btn-slit-start" class="btn-primary" style="margin-top:20px;width:100%;" disabled>
@@ -602,6 +608,7 @@
       <button id="slit-tab-B" class="slit-tab"        data-key="B" disabled>슬릿 B</button>
       <button id="slit-tab-C" class="slit-tab"        data-key="C" disabled>슬릿 C</button>
       <div style="flex:1"></div>
+      <button id="btn-slit-edit-img" class="btn-ghost"      style="min-height:36px;font-size:13px;padding:0 14px;">✏️ 편집</button>
       <button id="btn-slit-report"  class="btn-secondary" style="min-height:36px;font-size:13px;padding:0 14px;">📄 보고서</button>
       <button id="btn-slit-back2"   class="btn-ghost"     style="min-height:36px;font-size:13px;padding:0 14px;">← 모드 선택</button>
     </div>
@@ -640,11 +647,26 @@
 
         <div class="sidebar-divider"></div>
 
+        <div class="slit-section-title">🎨 색상 채널</div>
+        <div id="slit-channel-btns" class="slit-ch-btns">
+          <button class="slit-ch-btn active" data-ch="lum">전체</button>
+          <button class="slit-ch-btn" data-ch="R">🔴 R</button>
+          <button class="slit-ch-btn" data-ch="G">🟢 G</button>
+        </div>
+        <button id="btn-auto-enhance" class="sidebar-btn btn-secondary" style="margin-top:4px;">✨ 자동 보정 ON</button>
+
+        <div class="sidebar-divider"></div>
+
         <div class="slit-section-title">📡 자동 감지</div>
         <div class="slit-slider-row">
           <label>감도</label>
           <input type="range" id="slit-sensitivity" min="5" max="120" value="25">
           <span id="slit-sensitivity-val">25</span>
+        </div>
+        <div class="slit-slider-row">
+          <label>띠 높이</label>
+          <input type="range" id="slit-bandh" min="3" max="100" value="20">
+          <span id="slit-bandh-val">20</span>
         </div>
         <button id="slit-btn-detect" class="sidebar-btn btn-primary">🔍 자동 감지</button>
 
@@ -922,6 +944,64 @@
       <div class="about-contact">
         <span>선유고등학교 홍창기 개발 · 문의</span>
         <a href="mailto:hckgood@gmail.com">hckgood@gmail.com</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 이미지 편집기 모달 ───────────────────────────────── -->
+  <div id="slit-editor-modal" class="slit-editor-modal hidden">
+    <div class="editor-panel">
+      <div class="editor-titlebar">
+        <span>🖼️ 이미지 편집 — 슬릿 <b id="editor-slit-label">A</b></span>
+        <button id="btn-editor-cancel" class="btn-ghost" style="min-height:32px;padding:0 12px;">✕ 닫기</button>
+      </div>
+      <div class="editor-layout">
+        <!-- 미리보기 캔버스 -->
+        <div id="editor-canvas-wrap" class="editor-canvas-wrap">
+          <canvas id="editor-canvas" style="touch-action:none;display:block;cursor:grab;"></canvas>
+          <div id="editor-crop-hint" class="editor-crop-hint hidden">드래그하여 영역을 선택하세요</div>
+          <div id="editor-zoom-indicator" class="editor-zoom-indicator hidden">1×</div>
+        </div>
+        <!-- 컨트롤 패널 -->
+        <div class="editor-controls-panel">
+
+          <div class="editor-ctrl-group">
+            <div class="editor-ctrl-label">🔄 회전</div>
+            <div class="editor-ctrl-row">
+              <input type="range" id="editor-angle" class="editor-slider" min="-45" max="45" value="0" step="0.1">
+              <span id="editor-angle-val" class="editor-val">0.0°</span>
+            </div>
+            <button id="btn-editor-auto-rotate" class="btn-secondary editor-action-btn">✨ 자동 수평 감지</button>
+            <button id="btn-editor-grid"        class="btn-ghost editor-action-btn">📐 격자 표시</button>
+          </div>
+
+          <div class="editor-ctrl-group">
+            <div class="editor-ctrl-label">✂️ 크롭</div>
+            <button id="btn-editor-crop-toggle" class="btn-ghost editor-action-btn">드래그로 영역 선택</button>
+            <button id="btn-editor-crop-clear"  class="btn-ghost editor-action-btn hidden">✕ 크롭 취소</button>
+          </div>
+
+          <div class="editor-ctrl-group">
+            <div class="editor-ctrl-label">☀️ 밝기</div>
+            <div class="editor-ctrl-row">
+              <input type="range" id="editor-brightness" class="editor-slider" min="-100" max="100" value="0">
+              <span id="editor-brightness-val" class="editor-val">0</span>
+            </div>
+          </div>
+
+          <div class="editor-ctrl-group">
+            <div class="editor-ctrl-label">◑ 대비</div>
+            <div class="editor-ctrl-row">
+              <input type="range" id="editor-contrast" class="editor-slider" min="-100" max="100" value="0">
+              <span id="editor-contrast-val" class="editor-val">0</span>
+            </div>
+          </div>
+
+          <div class="editor-footer">
+            <button id="btn-editor-reset" class="btn-ghost">↺ 초기화</button>
+            <button id="btn-editor-ok"    class="btn-primary" style="flex:1;">✓ 적용</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

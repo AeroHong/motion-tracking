@@ -1,6 +1,6 @@
 // sw.js — 최소 서비스 워커 (PWA 홈 화면 설치용)
 // 버전 업데이트 시 CACHE 이름을 바꾸면 구 캐시가 자동 삭제됨
-const CACHE = 'motion-v8';
+const CACHE = 'motion-v16';
 const PRECACHE = ['/', '/index.html', '/style.css', '/manifest.json'];
 
 self.addEventListener('install', e => {
