@@ -16,6 +16,8 @@
   <link rel="stylesheet" href="style.css">
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- html2canvas (보고서 PNG 저장) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <!-- Google APIs (Drive Picker) -->
   <script src="https://apis.google.com/js/api.js"></script>
   <!-- Firebase -->
@@ -553,19 +555,38 @@
 
   <!-- ── 이중슬릿: 업로드 ──────────────────────────── -->
   <section id="screen-slit-upload" class="hidden">
-    <div class="upload-card" style="max-width:520px;margin:0 auto;">
+    <div class="upload-card" style="max-width:700px;margin:0 auto;">
       <button id="btn-slit-back" class="btn-ghost" style="margin-bottom:12px;align-self:flex-start;">← 모드 선택</button>
       <h3>🔬 이중슬릿 간섭무늬 분석</h3>
       <p style="color:var(--text-dim);font-size:14px;margin:8px 0 16px;">
-        간섭무늬가 찍힌 사진을 업로드하세요.<br>
-        (jpg · png · heic · webp 등 이미지 파일)
+        슬릿 A · B · C의 간섭무늬 사진을 업로드하세요. (최소 1개 이상)
       </p>
-      <div class="upload-row">
-        <input type="file" id="slit-file-input" accept="image/*" style="display:none">
-        <button id="slit-local-btn" class="btn-ghost drive-pick-btn">🖼️ 사진 선택</button>
-        <span id="slit-filename" class="filename-label">선택된 파일 없음</span>
+      <div class="slit-upload-grid">
+        <!-- 슬릿 A -->
+        <div class="slit-upload-card" id="slit-ucard-A">
+          <div class="slit-upload-label">슬릿 A</div>
+          <input type="file" id="slit-file-A" accept="image/*" style="display:none">
+          <button class="btn-ghost slit-pick-btn" data-key="A">🖼️ 사진 선택</button>
+          <img id="slit-preview-A" class="slit-preview hidden" src="" alt="">
+          <span id="slit-filename-A" class="filename-label">선택 안 됨</span>
+        </div>
+        <!-- 슬릿 B -->
+        <div class="slit-upload-card" id="slit-ucard-B">
+          <div class="slit-upload-label">슬릿 B</div>
+          <input type="file" id="slit-file-B" accept="image/*" style="display:none">
+          <button class="btn-ghost slit-pick-btn" data-key="B">🖼️ 사진 선택</button>
+          <img id="slit-preview-B" class="slit-preview hidden" src="" alt="">
+          <span id="slit-filename-B" class="filename-label">선택 안 됨</span>
+        </div>
+        <!-- 슬릿 C -->
+        <div class="slit-upload-card" id="slit-ucard-C">
+          <div class="slit-upload-label">슬릿 C</div>
+          <input type="file" id="slit-file-C" accept="image/*" style="display:none">
+          <button class="btn-ghost slit-pick-btn" data-key="C">🖼️ 사진 선택</button>
+          <img id="slit-preview-C" class="slit-preview hidden" src="" alt="">
+          <span id="slit-filename-C" class="filename-label">선택 안 됨</span>
+        </div>
       </div>
-      <img id="slit-preview" class="slit-preview hidden" src="" alt="미리보기">
       <button id="btn-slit-start" class="btn-primary" style="margin-top:20px;width:100%;" disabled>
         분석 시작 →
       </button>
@@ -575,65 +596,219 @@
   <!-- ── 이중슬릿: 분석 화면 ───────────────────────── -->
   <section id="screen-slit-analyze" class="hidden">
 
-    <!-- 캔버스 영역 -->
-    <div class="slit-canvas-wrap" id="slit-canvas-wrap">
-      <canvas id="slit-canvas" style="touch-action:none;cursor:crosshair;display:block;"></canvas>
+    <!-- 슬릿 탭 + 상단 버튼 -->
+    <div class="slit-tab-bar">
+      <button id="slit-tab-A" class="slit-tab active" data-key="A">슬릿 A</button>
+      <button id="slit-tab-B" class="slit-tab"        data-key="B" disabled>슬릿 B</button>
+      <button id="slit-tab-C" class="slit-tab"        data-key="C" disabled>슬릿 C</button>
+      <div style="flex:1"></div>
+      <button id="btn-slit-report"  class="btn-secondary" style="min-height:36px;font-size:13px;padding:0 14px;">📄 보고서</button>
+      <button id="btn-slit-back2"   class="btn-ghost"     style="min-height:36px;font-size:13px;padding:0 14px;">← 모드 선택</button>
     </div>
 
-    <!-- 우측 사이드바 -->
-    <div class="slit-sidebar">
+    <!-- 메인: 왼쪽(이미지+그래프) + 오른쪽(사이드바) -->
+    <div class="slit-main">
 
-      <!-- 내비게이션 -->
-      <button id="btn-slit-back2"    class="sidebar-btn btn-ghost">← 모드 선택</button>
-      <button id="btn-slit-reupload" class="sidebar-btn btn-ghost">🖼️ 사진 교체</button>
-      <div class="sidebar-divider"></div>
-
-      <!-- 모드 버튼 -->
-      <button id="slit-btn-pan"         class="sidebar-btn active">🖐 이동</button>
-      <button id="slit-btn-calibration" class="sidebar-btn">📏 기준 보정</button>
-      <button id="slit-btn-add"         class="sidebar-btn">➕ 무늬 추가</button>
-      <div id="slit-mode-hint" class="sidebar-hint-text" style="min-height:28px;"></div>
-
-      <!-- 보정 입력 패널 (2점 찍은 후 표시) -->
-      <div id="slit-calib-panel" class="slit-calib-panel hidden">
-        <div class="slit-calib-label">두 점 사이 실제 길이 (cm)</div>
-        <div class="slit-calib-row">
-          <input type="number" id="slit-calib-value" min="0.1" step="0.1" placeholder="예: 5.0">
-          <button id="slit-calib-ok" class="btn-primary" style="min-height:32px;padding:0 10px;font-size:13px;">✓</button>
+      <!-- 왼쪽: 밝기 그래프(위) + 이미지 캔버스(아래) -->
+      <div class="slit-left">
+        <div class="slit-bright-wrap">
+          <canvas id="slit-bright-canvas" title="밝기 그래프 — ➕ 모드에서 클릭하면 무늬 추가"></canvas>
+        </div>
+        <div class="slit-image-wrap" id="slit-canvas-wrap">
+          <canvas id="slit-canvas" style="touch-action:none;cursor:crosshair;display:block;"></canvas>
         </div>
       </div>
 
-      <div class="sidebar-divider"></div>
+      <!-- 우측 사이드바 -->
+      <div class="slit-sidebar">
+        <button id="btn-slit-reupload" class="sidebar-btn btn-ghost">🖼️ 사진 교체</button>
+        <div class="sidebar-divider"></div>
 
-      <!-- 스캔선 & 자동 감지 -->
-      <div class="slit-section-title">📡 스캔선 자동 감지</div>
-      <div class="slit-slider-row">
-        <label>감도</label>
-        <input type="range" id="slit-sensitivity" min="5" max="120" value="25">
-        <span id="slit-sensitivity-val">25</span>
+        <button id="slit-btn-pan"         class="sidebar-btn active">🖐 이동</button>
+        <button id="slit-btn-calibration" class="sidebar-btn">📏 기준 보정</button>
+        <button id="slit-btn-add"         class="sidebar-btn">➕ 무늬 추가</button>
+        <button id="slit-btn-setcenter"   class="sidebar-btn">⭕ m=0 지정</button>
+        <div id="slit-mode-hint" class="sidebar-hint-text" style="min-height:28px;font-size:11px;color:var(--text-dim);"></div>
+
+        <div id="slit-calib-panel" class="slit-calib-panel hidden">
+          <div class="slit-calib-label">두 점 사이 실제 길이 (cm)</div>
+          <div class="slit-calib-row">
+            <input type="number" id="slit-calib-value" min="0.1" step="0.1" placeholder="예: 5.0">
+            <button id="slit-calib-ok" class="btn-primary" style="min-height:32px;padding:0 10px;font-size:13px;">✓</button>
+          </div>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="slit-section-title">📡 자동 감지</div>
+        <div class="slit-slider-row">
+          <label>감도</label>
+          <input type="range" id="slit-sensitivity" min="5" max="120" value="25">
+          <span id="slit-sensitivity-val">25</span>
+        </div>
+        <button id="slit-btn-detect" class="sidebar-btn btn-primary">🔍 자동 감지</button>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="slit-section-title">
+          무늬 목록 <span id="slit-fringe-count" class="slit-count-chip"></span>
+        </div>
+        <div id="slit-fringe-list" class="slit-fringe-list"></div>
+        <button id="slit-btn-clear" class="sidebar-btn btn-ghost" style="font-size:11px;min-height:28px;margin-top:2px;">전체 삭제</button>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="slit-section-title">📐 측정 결과 (Δy)</div>
+        <div id="slit-results" class="slit-results"></div>
       </div>
-      <div class="slit-slider-row">
-        <label>최소 간격</label>
-        <input type="range" id="slit-min-spacing" min="5" max="80" value="20">
-        <span id="slit-min-spacing-val">20</span>px
+    </div>
+  </section>
+
+  <!-- ── 이중슬릿: 보고서 ───────────────────────────── -->
+  <section id="screen-slit-report" class="hidden">
+    <div class="sr-toolbar">
+      <button id="btn-sr-back" class="btn-ghost" style="min-height:38px;padding:0 16px;font-size:14px;">← 분석으로</button>
+      <span style="font-weight:700;font-size:15px;">📄 이중슬릿 실험 보고서</span>
+      <button id="btn-sr-save" class="btn-primary" style="min-height:38px;padding:0 18px;font-size:14px;">💾 PNG 저장</button>
+    </div>
+
+    <div style="overflow-y:auto;flex:1;padding:16px;">
+    <div id="sr-body" class="sr-body">
+
+      <!-- 학생 정보 -->
+      <div class="sr-section sr-header-section">
+        <h2 style="text-align:center;margin-bottom:14px;font-size:18px;">이중슬릿 간섭무늬 실험 보고서</h2>
+        <div class="sr-info-grid">
+          <label>이름<input id="sr-name" placeholder="홍길동"></label>
+          <label>학번<input id="sr-number" placeholder="10101" maxlength="5" inputmode="numeric"></label>
+          <label>반<input id="sr-class" placeholder="1" maxlength="2"></label>
+          <label>날짜<input id="sr-date" type="date"></label>
+        </div>
       </div>
-      <button id="slit-btn-detect" class="sidebar-btn btn-primary">🔍 자동 감지</button>
 
-      <div class="sidebar-divider"></div>
-
-      <!-- 무늬 목록 -->
-      <div class="slit-section-title">
-        무늬 목록 <span id="slit-fringe-count" class="slit-count-chip"></span>
+      <!-- 실험 조건 -->
+      <div class="sr-section">
+        <h3>실험 조건</h3>
+        <div class="sr-cond-row">
+          <label>스크린까지의 거리 L
+            <div class="sr-input-unit"><input id="sr-L" type="number" step="0.1" min="0" placeholder="100"> cm</div>
+          </label>
+        </div>
       </div>
-      <div id="slit-fringe-list" class="slit-fringe-list"></div>
-      <button id="slit-btn-clear" class="sidebar-btn btn-ghost" style="font-size:11px;min-height:28px;margin-top:2px;">전체 삭제</button>
 
-      <div class="sidebar-divider"></div>
+      <!-- 슬릿 A -->
+      <div class="sr-slit-block" id="sr-block-A">
+        <h3 class="sr-slit-title">슬릿 A</h3>
+        <div class="sr-slit-body">
+          <div class="sr-slit-images">
+            <div>
+              <div class="sr-img-label">간섭무늬</div>
+              <canvas id="sr-img-A" class="sr-canvas"></canvas>
+            </div>
+            <div>
+              <div class="sr-img-label">밝기 그래프</div>
+              <canvas id="sr-bright-A" class="sr-canvas"></canvas>
+            </div>
+          </div>
+          <div class="sr-slit-data">
+            <div class="sr-dy-row">
+              중앙(m=0) ↔ m=±1 평균 Δy<sub>A</sub> = <strong id="sr-dy-A" class="sr-dy-val">--</strong>
+            </div>
+            <label class="sr-input-label">슬릿 간격 d<sub>A</sub>
+              <div class="sr-input-unit"><input id="sr-d-A" type="number" step="0.001" min="0" placeholder="0.250"> mm</div>
+            </label>
+            <div class="sr-question">
+              슬릿 A의 파장을 구하시오. (단위: nm)<br>
+              <div class="sr-lambda-row">λ<sub>A</sub> = <input id="sr-lambda-A" class="sr-lambda-input" placeholder="계산값"> nm</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <!-- 측정 결과 -->
-      <div class="slit-section-title">📐 측정 결과 (Δy)</div>
-      <div id="slit-results" class="slit-results"></div>
+      <!-- 슬릿 B -->
+      <div class="sr-slit-block" id="sr-block-B">
+        <h3 class="sr-slit-title">슬릿 B</h3>
+        <div class="sr-slit-body">
+          <div class="sr-slit-images">
+            <div>
+              <div class="sr-img-label">간섭무늬</div>
+              <canvas id="sr-img-B" class="sr-canvas"></canvas>
+            </div>
+            <div>
+              <div class="sr-img-label">밝기 그래프</div>
+              <canvas id="sr-bright-B" class="sr-canvas"></canvas>
+            </div>
+          </div>
+          <div class="sr-slit-data">
+            <div class="sr-dy-row">
+              중앙(m=0) ↔ m=±1 평균 Δy<sub>B</sub> = <strong id="sr-dy-B" class="sr-dy-val">--</strong>
+            </div>
+            <label class="sr-input-label">슬릿 간격 d<sub>B</sub>
+              <div class="sr-input-unit"><input id="sr-d-B" type="number" step="0.001" min="0" placeholder="0.250"> mm</div>
+            </label>
+            <div class="sr-question">
+              슬릿 B의 파장을 구하시오. (단위: nm)<br>
+              <div class="sr-lambda-row">λ<sub>B</sub> = <input id="sr-lambda-B" class="sr-lambda-input" placeholder="계산값"> nm</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      <!-- 슬릿 C -->
+      <div class="sr-slit-block" id="sr-block-C">
+        <h3 class="sr-slit-title">슬릿 C</h3>
+        <div class="sr-slit-body">
+          <div class="sr-slit-images">
+            <div>
+              <div class="sr-img-label">간섭무늬</div>
+              <canvas id="sr-img-C" class="sr-canvas"></canvas>
+            </div>
+            <div>
+              <div class="sr-img-label">밝기 그래프</div>
+              <canvas id="sr-bright-C" class="sr-canvas"></canvas>
+            </div>
+          </div>
+          <div class="sr-slit-data">
+            <div class="sr-dy-row">
+              중앙(m=0) ↔ m=±1 평균 Δy<sub>C</sub> = <strong id="sr-dy-C" class="sr-dy-val">--</strong>
+            </div>
+            <label class="sr-input-label">슬릿 간격 d<sub>C</sub>
+              <div class="sr-input-unit"><input id="sr-d-C" type="number" step="0.001" min="0" placeholder="0.250"> mm</div>
+            </label>
+            <div class="sr-question">
+              슬릿 C의 파장을 구하시오. (단위: nm)<br>
+              <div class="sr-lambda-row">λ<sub>C</sub> = <input id="sr-lambda-C" class="sr-lambda-input" placeholder="계산값"> nm</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 관찰 -->
+      <div class="sr-section">
+        <h3>관찰</h3>
+        <p class="sr-prompt">슬릿 간격 이외에 실험에서 관찰한 내용을 기록하세요.</p>
+        <textarea id="sr-observation" class="sr-textarea" rows="4"
+          placeholder="(예: 슬릿 간격이 좁을수록 간섭무늬 간격이 넓어졌다. 중앙 밝은 무늬가 가장 밝게 나타났다.)"></textarea>
+      </div>
+
+      <!-- 고찰 -->
+      <div class="sr-section">
+        <h3>고찰</h3>
+        <div class="sr-q-block">
+          <div class="sr-q-label">Q1. 슬릿 간격이 변할 때 무늬 간격은 어떻게 변하는지 서술하시오.</div>
+          <textarea id="sr-q1" class="sr-textarea" rows="3" placeholder="서술하세요..."></textarea>
+        </div>
+        <div class="sr-q-block">
+          <div class="sr-q-label">Q2. 스크린까지의 거리 L이 늘어나면 무늬 간격은 어떻게 변할지 서술하시오.</div>
+          <textarea id="sr-q2" class="sr-textarea" rows="3" placeholder="서술하세요..."></textarea>
+        </div>
+        <div class="sr-q-block">
+          <div class="sr-q-label">Q3. 다른 색상의 빛을 사용했을 때 무늬 간격은 어떻게 변할지 서술하시오.</div>
+          <textarea id="sr-q3" class="sr-textarea" rows="3" placeholder="서술하세요..."></textarea>
+        </div>
+      </div>
+
+    </div><!-- sr-body -->
     </div>
   </section>
 

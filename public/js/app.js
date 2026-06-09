@@ -75,6 +75,7 @@ const screens = {
   'free-result':  $('screen-free-result'),
   'slit-upload':  $('screen-slit-upload'),
   'slit-analyze': $('screen-slit-analyze'),
+  'slit-report':  $('screen-slit-report'),
 };
 
 let currentUser = null;
@@ -207,7 +208,7 @@ function showScreen(name) {
   Object.values(screens).forEach(s => s?.classList.add('hidden'));
   screens[name]?.classList.remove('hidden');
   // 로그인·트래킹 화면에서는 푸터 숨김, 나머지는 표시
-  const hideFooter = ['login', 'track', 'free-track', 'slit-analyze'].includes(name);
+  const hideFooter = ['login', 'track', 'free-track', 'slit-analyze', 'slit-report'].includes(name);
   $('app-footer')?.classList.toggle('hidden', hideFooter);
 }
 
