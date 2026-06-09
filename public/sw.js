@@ -1,6 +1,6 @@
-// sw.js — 최소 서비스 워커 (PWA 홈 화면 설치용)
+// sw.js — 서비스 워커 (PWA 홈 화면 설치용)
 // 버전 업데이트 시 CACHE 이름을 바꾸면 구 캐시가 자동 삭제됨
-const CACHE = 'motion-v16';
+const CACHE = 'motion-v17';
 const PRECACHE = ['/', '/index.html', '/style.css', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -11,20 +11,42 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+      .then(() => {
+        // 새 버전이 활성화되면 열려 있는 모든 탭에 자동 리로드 요청
+        return self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+          .then(clients => clients.forEach(client => client.postMessage({ type: 'SW_UPDATED' })));
+      })
   );
 });
 
 self.addEventListener('fetch', e => {
-  // Firebase Auth/Firestore는 항상 네트워크 우선
   const url = new URL(e.request.url);
+
+  // Firebase Auth/Firestore/Google — 항상 네트워크 직통
   if (url.hostname.includes('firebase') || url.hostname.includes('google')) {
     e.respondWith(fetch(e.request));
     return;
   }
-  // 나머지: 캐시 우선 → 네트워크 폴백
+
+  // index.html / 루트 — 네트워크 우선, 실패 시 캐시 폴백
+  // → 배포 즉시 최신 HTML 수신, 오프라인에서도 구동 가능
+  if (url.pathname === '/' || url.pathname.endsWith('.html')) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // JS / CSS / 기타 정적 자산 — 캐시 우선, 없으면 네트워크
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );

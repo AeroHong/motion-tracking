@@ -2,17 +2,15 @@
 
 // ── 서비스 워커 등록 (PWA 홈 화면 설치) ──────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').then(reg => {
-    // 새 SW가 설치 완료되면 업데이트 배너 표시
-    reg.addEventListener('updatefound', () => {
-      const sw = reg.installing;
-      sw.addEventListener('statechange', () => {
-        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-          _showUpdateBanner();
-        }
-      });
-    });
-  }).catch(() => {});
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+  // 새 SW가 activate 되면 자동 리로드 (학생이 아무것도 안 해도 최신 버전 적용)
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'SW_UPDATED') {
+      // 짧은 딜레이 후 리로드 — SW claim 완료 보장
+      setTimeout(() => window.location.reload(), 300);
+    }
+  });
 }
 
 // ── 강제 새로고침 (캐시 삭제 + SW 재등록) ────────────────────
@@ -40,14 +38,6 @@ document.getElementById('btn-force-refresh')?.addEventListener('click', async ()
   location.replace(url);
 });
 
-function _showUpdateBanner() {
-  if (document.getElementById('update-banner')) return;
-  const b = document.createElement('div');
-  b.id = 'update-banner';
-  b.innerHTML = '<span>✨ 새 버전이 설치됐습니다</span>'
-              + '<button onclick="window.location.reload()">새로고침</button>';
-  document.body.appendChild(b);
-}
 
 let _installPrompt = null;
 const _isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
