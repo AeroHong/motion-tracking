@@ -56,11 +56,17 @@
           <button id="btn-card-classic" class="btn-primary mode-card-btn">선택하기</button>
         </div>
         <div class="mode-card">
-          <span class="mode-card-badge">NEW</span>
           <div class="mode-card-icon">📹</div>
           <h3>자유 물체 운동 분석</h3>
           <p class="mode-card-desc">영상 1개로 임의의 물체 운동을<br>좌표계로 분석</p>
           <button id="btn-card-free" class="btn-primary mode-card-btn">선택하기</button>
+        </div>
+        <div class="mode-card">
+          <span class="mode-card-badge">NEW</span>
+          <div class="mode-card-icon">🔬</div>
+          <h3>이중슬릿<br>간섭무늬 분석</h3>
+          <p class="mode-card-desc">사진 한 장으로<br>무늬 간격(Δy)을 측정</p>
+          <button id="btn-card-slit" class="btn-primary mode-card-btn">선택하기</button>
         </div>
       </div>
 
@@ -99,8 +105,17 @@
 
       <!-- 개발 현황 -->
       <details class="tip-card changelog-card">
-        <summary>📋 개발 현황 <span class="version-chip">v1.5</span></summary>
+        <summary>📋 개발 현황 <span class="version-chip">v1.6</span></summary>
         <div class="changelog">
+          <div class="cl-entry">
+            <span class="cl-ver">v1.6</span>
+            <span class="cl-date">2026.06</span>
+            <ul class="cl-items">
+              <li>이중슬릿 간섭무늬 분석 모드 추가 — 사진에서 Δy 자동 측정</li>
+              <li>수평 스캔선 + 가우시안 스무딩 기반 밝기 피크 자동 감지</li>
+              <li>px → cm 보정, 중앙(m=0) 무늬 지정, 무늬 수동 추가/삭제</li>
+            </ul>
+          </div>
           <div class="cl-entry">
             <span class="cl-ver">v1.5</span>
             <span class="cl-date">2026.05.27</span>
@@ -536,6 +551,92 @@
     <button id="fm-btn-back-track" class="btn-ghost">← 트래킹으로 돌아가기</button>
   </section>
 
+  <!-- ── 이중슬릿: 업로드 ──────────────────────────── -->
+  <section id="screen-slit-upload" class="hidden">
+    <div class="upload-card" style="max-width:520px;margin:0 auto;">
+      <button id="btn-slit-back" class="btn-ghost" style="margin-bottom:12px;align-self:flex-start;">← 모드 선택</button>
+      <h3>🔬 이중슬릿 간섭무늬 분석</h3>
+      <p style="color:var(--text-dim);font-size:14px;margin:8px 0 16px;">
+        간섭무늬가 찍힌 사진을 업로드하세요.<br>
+        (jpg · png · heic · webp 등 이미지 파일)
+      </p>
+      <div class="upload-row">
+        <input type="file" id="slit-file-input" accept="image/*" style="display:none">
+        <button id="slit-local-btn" class="btn-ghost drive-pick-btn">🖼️ 사진 선택</button>
+        <span id="slit-filename" class="filename-label">선택된 파일 없음</span>
+      </div>
+      <img id="slit-preview" class="slit-preview hidden" src="" alt="미리보기">
+      <button id="btn-slit-start" class="btn-primary" style="margin-top:20px;width:100%;" disabled>
+        분석 시작 →
+      </button>
+    </div>
+  </section>
+
+  <!-- ── 이중슬릿: 분석 화면 ───────────────────────── -->
+  <section id="screen-slit-analyze" class="hidden">
+
+    <!-- 캔버스 영역 -->
+    <div class="slit-canvas-wrap" id="slit-canvas-wrap">
+      <canvas id="slit-canvas" style="touch-action:none;cursor:crosshair;display:block;"></canvas>
+    </div>
+
+    <!-- 우측 사이드바 -->
+    <div class="slit-sidebar">
+
+      <!-- 내비게이션 -->
+      <button id="btn-slit-back2"    class="sidebar-btn btn-ghost">← 모드 선택</button>
+      <button id="btn-slit-reupload" class="sidebar-btn btn-ghost">🖼️ 사진 교체</button>
+      <div class="sidebar-divider"></div>
+
+      <!-- 모드 버튼 -->
+      <button id="slit-btn-pan"         class="sidebar-btn active">🖐 이동</button>
+      <button id="slit-btn-calibration" class="sidebar-btn">📏 기준 보정</button>
+      <button id="slit-btn-add"         class="sidebar-btn">➕ 무늬 추가</button>
+      <div id="slit-mode-hint" class="sidebar-hint-text" style="min-height:28px;"></div>
+
+      <!-- 보정 입력 패널 (2점 찍은 후 표시) -->
+      <div id="slit-calib-panel" class="slit-calib-panel hidden">
+        <div class="slit-calib-label">두 점 사이 실제 길이 (cm)</div>
+        <div class="slit-calib-row">
+          <input type="number" id="slit-calib-value" min="0.1" step="0.1" placeholder="예: 5.0">
+          <button id="slit-calib-ok" class="btn-primary" style="min-height:32px;padding:0 10px;font-size:13px;">✓</button>
+        </div>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- 스캔선 & 자동 감지 -->
+      <div class="slit-section-title">📡 스캔선 자동 감지</div>
+      <div class="slit-slider-row">
+        <label>감도</label>
+        <input type="range" id="slit-sensitivity" min="5" max="120" value="25">
+        <span id="slit-sensitivity-val">25</span>
+      </div>
+      <div class="slit-slider-row">
+        <label>최소 간격</label>
+        <input type="range" id="slit-min-spacing" min="5" max="80" value="20">
+        <span id="slit-min-spacing-val">20</span>px
+      </div>
+      <button id="slit-btn-detect" class="sidebar-btn btn-primary">🔍 자동 감지</button>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- 무늬 목록 -->
+      <div class="slit-section-title">
+        무늬 목록 <span id="slit-fringe-count" class="slit-count-chip"></span>
+      </div>
+      <div id="slit-fringe-list" class="slit-fringe-list"></div>
+      <button id="slit-btn-clear" class="sidebar-btn btn-ghost" style="font-size:11px;min-height:28px;margin-top:2px;">전체 삭제</button>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- 측정 결과 -->
+      <div class="slit-section-title">📐 측정 결과 (Δy)</div>
+      <div id="slit-results" class="slit-results"></div>
+
+    </div>
+  </section>
+
   <!-- ── 촬영 체크리스트 모달 ── -->
   <div id="checklist-modal" class="modal-overlay hidden">
     <div class="modal-box checklist-box">
@@ -591,7 +692,7 @@
 
   <!-- ── 푸터 ── -->
   <footer id="app-footer" class="app-footer hidden">
-    <span class="footer-title">⚗️ Motion Tracker <span class="footer-ver">v1.5</span></span>
+    <span class="footer-title">⚗️ Motion Tracker <span class="footer-ver">v1.6</span></span>
     <span class="footer-sep">|</span>
     <span>선유고등학교 홍창기 개발</span>
     <span class="footer-sep">|</span>

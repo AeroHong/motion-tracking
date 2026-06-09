@@ -50,7 +50,8 @@ import { doc, getDoc, setDoc }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { ZoomController }  from './zoomController.js';
 import { makeDraggable }   from './utils.js';
-import { initFreeMotion }  from './freeMotion.js';
+import { initFreeMotion }    from './freeMotion.js';
+import { initSlitAnalyzer }  from './slitAnalyzer.js';
 import { VideoController }    from './video.js';
 import { Calibration }        from './calibration.js';
 import { Tracker }            from './tracker.js';
@@ -69,9 +70,11 @@ const screens = {
   upload:        $('screen-upload'),
   track:         $('screen-track'),
   result:        $('screen-result'),
-  'free-upload': $('screen-free-upload'),
-  'free-track':  $('screen-free-track'),
-  'free-result': $('screen-free-result'),
+  'free-upload':  $('screen-free-upload'),
+  'free-track':   $('screen-free-track'),
+  'free-result':  $('screen-free-result'),
+  'slit-upload':  $('screen-slit-upload'),
+  'slit-analyze': $('screen-slit-analyze'),
 };
 
 let currentUser = null;
@@ -191,16 +194,20 @@ $('checklist-modal').addEventListener('click', e => {
 // 모드 선택
 $('btn-card-classic').addEventListener('click', () => { showScreen('upload'); checkPrevReport(); });
 $('btn-card-free').addEventListener('click',    () => showScreen('free-upload'));
+$('btn-card-slit').addEventListener('click',    () => showScreen('slit-upload'));
 $('btn-back-mode').addEventListener('click',    () => showScreen('mode'));
 
 // freeMotion 모듈 초기화
 initFreeMotion(showScreen);
 
+// 이중슬릿 모듈 초기화
+initSlitAnalyzer(showScreen);
+
 function showScreen(name) {
   Object.values(screens).forEach(s => s?.classList.add('hidden'));
   screens[name]?.classList.remove('hidden');
   // 로그인·트래킹 화면에서는 푸터 숨김, 나머지는 표시
-  const hideFooter = ['login', 'track', 'free-track'].includes(name);
+  const hideFooter = ['login', 'track', 'free-track', 'slit-analyze'].includes(name);
   $('app-footer')?.classList.toggle('hidden', hideFooter);
 }
 
