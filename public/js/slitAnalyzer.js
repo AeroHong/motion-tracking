@@ -17,11 +17,10 @@ const st = {
   fringes:        [],       // [{xPx}] 오름차순 (캔버스 픽셀)
   centerIdx:      -1,       // m=0 무늬 인덱스
   selectedIdx:    -1,
-  sensitivity:    25,       // 피크 최소 prominence (brightness 0-255 단위)
+  sensitivity:    25,       // 피크 최소 prominence (0-255)
   minSpacing:     20,       // 무늬 최소 간격 (캔버스 px)
 };
 
-let _downClientX = 0, _downClientY = 0;
 let canvas, ctx, calib, zoom, _show;
 
 // ── 초기화 ────────────────────────────────────────────────
@@ -30,17 +29,24 @@ export function initSlitAnalyzer(showScreen) {
   canvas = $('slit-canvas');
   ctx    = canvas.getContext('2d');
   calib  = new Calibration();
-  zoom   = new ZoomController(canvas, {
-    onDown: _onDown,
-    onMove: _onMove,
-    onUp:   _onUp,
+
+  // 마우스 이벤트는 캔버스에 직접 등록 (데스크톱/크롬북)
+  canvas.addEventListener('mousedown',  _down);
+  canvas.addEventListener('mousemove',  _move);
+  canvas.addEventListener('mouseup',    _up);
+  canvas.addEventListener('mouseleave', _leave);
+
+  // 터치 이벤트는 ZoomController가 핀치줌 처리 후 단일 손가락을 위임
+  zoom = new ZoomController(canvas, {
+    onDown: _down, onMove: _move, onUp: _up,
   });
+
   _bindUpload();
   _bindControls();
 }
 
 function _enterAnalyze() {
-  // 화면이 DOM에 렌더된 후 크기 계산
+  // hidden 해제 후 DOM 크기 확정된 뒤 캔버스 크기 계산
   requestAnimationFrame(() => {
     _fitCanvas();
     zoom.reset();
@@ -136,10 +142,19 @@ function _setMode(mode) {
     add:         '밝은 무늬 중심을 클릭하여 추가',
   };
   $('slit-mode-hint').textContent = hints[mode] || '';
+  canvas.style.cursor = (mode === 'add' || mode === 'calibration') ? 'crosshair' : 'grab';
 
-  const panel = $('slit-calib-panel');
-  if (mode === 'calibration' && calib.points.length === 2) panel.classList.remove('hidden');
-  else if (mode !== 'calibration')                          panel.classList.add('hidden');
+  if (mode !== 'calibration') {
+    $('slit-calib-panel').classList.add('hidden');
+    st.calibDragIdx = -1;
+  } else if (calib.points.length === 2) {
+    _showCalibPanel();
+  }
+}
+
+function _showCalibPanel() {
+  $('slit-calib-panel').classList.remove('hidden');
+  $('slit-calib-value').focus();
 }
 
 function _applyCalib() {
@@ -167,7 +182,6 @@ function _autoDetect() {
   const n     = canvas.width;
   const bright = new Float32Array(n);
 
-  // 인접 5행 평균 밝기 (luminance)
   for (let x = 0; x < n; x++) {
     let sum = 0;
     for (let r = 0; r < rows; r++) {
@@ -182,9 +196,7 @@ function _autoDetect() {
   const peaks    = _findPeaks(smoothed, st.sensitivity, st.minSpacing);
 
   if (peaks.length === 0) {
-    alert('무늬를 감지하지 못했습니다.\n' +
-          '노란 스캔선을 밝은 무늬 위에 놓고,\n' +
-          '감도(Prominence)를 낮춰 다시 시도하세요.');
+    alert('무늬를 감지하지 못했습니다.\n노란 스캔선을 밝은 무늬 위로 이동하거나\n감도를 낮춰 다시 시도하세요.');
     return;
   }
 
@@ -218,7 +230,7 @@ function _gaussSmooth(arr, sigma) {
   return out;
 }
 
-// prominence 기반 피크 탐색 — 어둡고 밝은 패턴 모두 대응
+// prominence 기반 피크 탐색
 function _findPeaks(arr, minProm, minSp) {
   const n = arr.length, peaks = [];
   for (let x = 1; x < n - 1; x++) {
@@ -238,7 +250,7 @@ function _findPeaks(arr, minProm, minSp) {
 }
 
 // ── 캔버스 좌표 변환 ─────────────────────────────────────
-function _toCanvas(e) {
+function _pt(e) {
   const rect = canvas.getBoundingClientRect();
   return {
     x: (e.clientX - rect.left) * canvas.width  / rect.width,
@@ -246,34 +258,70 @@ function _toCanvas(e) {
   };
 }
 
-// ── 캔버스 이벤트 (ZoomController 콜백) ──────────────────
-function _onDown(e) {
-  _downClientX = e.clientX;
-  _downClientY = e.clientY;
-  const { x, y } = _toCanvas(e);
+// ── 캔버스 이벤트 ────────────────────────────────────────
+function _down(e) {
+  const { x, y } = _pt(e);
 
-  // 스캔선 핸들 드래그
-  if (Math.abs(y - st.scanY) < 16) { st.isDraggingScan = true; return; }
-
-  // 보정 점 드래그
-  if (st.mode === 'calibration') {
-    const idx = calib.findPointNear(x, y);
-    if (idx >= 0) { st.calibDragIdx = idx; return; }
+  // ① 스캔선 드래그 시작 (어느 모드에서나)
+  if (Math.abs(y - st.scanY) < 16) {
+    st.isDraggingScan = true;
+    return;
   }
 
-  if (st.mode === 'pan') st.panStart = { clientX: e.clientX, clientY: e.clientY };
+  // ② 패닝
+  if (st.mode === 'pan') {
+    st.panStart = { clientX: e.clientX, clientY: e.clientY };
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+
+  // ③ 기준 보정 모드
+  if (st.mode === 'calibration') {
+    // 보정 버튼 클릭 → 입력창 표시
+    if (calib.points.length === 2 && calib.isOnButton(x, y)) {
+      _showCalibPanel();
+      return;
+    }
+    // 기존 점 드래그
+    const nearIdx = calib.findPointNear(x, y);
+    if (nearIdx !== -1) {
+      st.calibDragIdx = nearIdx;
+      return;
+    }
+    // 새 점 추가 (최대 2개)
+    if (calib.points.length < 2) {
+      calib.addPoint(x, y);
+      if (calib.points.length === 2) _showCalibPanel();
+    }
+    _render();
+    return;
+  }
+
+  // ④ 무늬 추가 모드
+  if (st.mode === 'add') {
+    const nearIdx = _nearFringe(x);
+    if (nearIdx >= 0 && Math.abs(st.fringes[nearIdx].xPx - x) < 14) {
+      // 기존 무늬 클릭 → 선택
+      st.selectedIdx = nearIdx;
+    } else {
+      // 새 무늬 추가
+      _addFringe(x);
+    }
+    _render(); _updateFringeList();
+  }
 }
 
-function _onMove(e) {
+function _move(e) {
   if (st.isDraggingScan) {
-    st.scanY = Math.max(2, Math.min(canvas.height - 2, _toCanvas(e).y));
+    st.scanY = Math.max(2, Math.min(canvas.height - 2, _pt(e).y));
     _render(); return;
   }
   if (st.calibDragIdx >= 0) {
-    const { x, y } = _toCanvas(e);
+    const { x, y } = _pt(e);
     calib.movePoint(st.calibDragIdx, x, y);
+    // 이미 보정값이 있으면 scale 갱신
     if (calib.isCalibrated) calib.setRealLength(calib.realLengthCm);
-    _render(); _updateResults(); return;
+    _render(); _updateFringeList(); _updateResults(); return;
   }
   if (st.mode === 'pan' && st.panStart) {
     zoom.pan(e.clientX - st.panStart.clientX, e.clientY - st.panStart.clientY);
@@ -281,52 +329,21 @@ function _onMove(e) {
   }
 }
 
-function _onUp(e) {
-  const dx      = Math.abs(e.clientX - _downClientX);
-  const dy      = Math.abs(e.clientY - _downClientY);
-  const wasDrag = st.isDraggingScan || (st.calibDragIdx >= 0) || dx > 6 || dy > 6;
-
+function _up(e) {
   st.isDraggingScan = false;
   st.calibDragIdx   = -1;
-  st.panStart       = null;
-  if (wasDrag) return;
-
-  const { x, y } = _toCanvas(e);
-  if (Math.abs(y - st.scanY) < 16) return;
-
-  // 보정 버튼 탭 (어느 모드에서나)
-  if (calib.points.length === 2 && calib.isOnButton(x, y)) {
-    $('slit-calib-panel').classList.remove('hidden');
-    $('slit-calib-value').focus();
-    return;
+  if (st.panStart) {
+    st.panStart = null;
+    canvas.style.cursor = 'grab';
   }
+}
 
-  if (st.mode === 'calibration') {
-    if (calib.addPoint(x, y)) {
-      if (calib.points.length === 2) {
-        $('slit-calib-panel').classList.remove('hidden');
-        $('slit-calib-value').focus();
-      }
-      _render();
-    }
-    return;
-  }
-
-  if (st.mode === 'add') {
-    const nearIdx = _nearFringe(x);
-    if (nearIdx >= 0 && Math.abs(st.fringes[nearIdx].xPx - x) < 14) {
-      st.selectedIdx = nearIdx;
-    } else {
-      _addFringe(x);
-    }
-    _render(); _updateFringeList(); return;
-  }
-
-  // pan 모드: 무늬 클릭 → 선택
-  const nearIdx = _nearFringe(x);
-  if (nearIdx >= 0 && Math.abs(st.fringes[nearIdx].xPx - x) < 14) {
-    st.selectedIdx = nearIdx;
-    _render(); _updateFringeList();
+function _leave() {
+  st.isDraggingScan = false;
+  st.calibDragIdx   = -1;
+  if (st.panStart) {
+    st.panStart = null;
+    canvas.style.cursor = 'grab';
   }
 }
 
@@ -388,6 +405,7 @@ function _drawScanLine() {
   ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
   ctx.setLineDash([]);
 
+  // 드래그 핸들 (우측 끝)
   const hx = canvas.width - 18;
   ctx.fillStyle = 'rgba(255,210,0,0.9)';
   ctx.beginPath(); ctx.arc(hx, y, 10, 0, Math.PI * 2); ctx.fill();
