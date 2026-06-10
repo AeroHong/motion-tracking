@@ -1522,10 +1522,20 @@ async function _saveReportPng() {
       windowWidth:  body.scrollWidth,
       windowHeight: body.scrollHeight,
     });
-    const a = document.createElement('a');
-    a.href = cvs.toDataURL('image/png');
-    a.download = `이중슬릿보고서_${$('sr-name')?.value||'학생'}.png`;
-    a.click();
+    await new Promise((resolve, reject) => {
+      cvs.toBlob(blob => {
+        if (!blob) { reject(new Error('이미지 생성 실패')); return; }
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = `이중슬릿보고서_${$('sr-name')?.value||'학생'}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        resolve();
+      }, 'image/png');
+    });
   } catch(e) {
     alert('저장 중 오류가 발생했습니다: ' + e.message);
   } finally {

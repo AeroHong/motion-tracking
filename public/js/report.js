@@ -1,14 +1,21 @@
 // report.js — OffscreenCanvas 합성으로 보고서 PNG 생성
 
+// Android Chrome은 DOM에 추가되지 않은 <a> 클릭이 무시됨
+function _triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 export async function generateReport(options) {
   const blob = await renderReportBlob(options);
   const { studentName, className, date } = options;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `운동분석_${studentName}_${className}_${date}.png`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  _triggerDownload(blob, `운동분석_${studentName}_${className}_${date}.png`);
   return blob;
 }
 
@@ -125,12 +132,7 @@ export async function renderReportBlob({
 export async function generateFreeMotionReport(options) {
   const blob = await renderFreeMotionReportBlob(options);
   const { studentName, className, date, motionLabel } = options;
-  const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href     = url;
-  a.download = `운동분석_${motionLabel}_${studentName}_${className}_${date}.png`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  _triggerDownload(blob, `운동분석_${motionLabel}_${studentName}_${className}_${date}.png`);
   return blob;
 }
 
