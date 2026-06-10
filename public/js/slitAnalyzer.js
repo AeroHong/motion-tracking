@@ -51,6 +51,8 @@ const brightVP = { scale: 1, offset: 0, dragX: null, dragOff: 0 };
 
 // 무늬 추가 모드에서 호버 위치 (canvas 좌표계 x, null이면 표시 안 함)
 let hoverX = null;
+// 터치/드래그 배치 중인 미확정 무늬 x (null이면 없음)
+let pendingFringeX = null;
 
 // ── 초기화 ────────────────────────────────────────────────
 export function initSlitAnalyzer(showScreen) {
@@ -553,7 +555,9 @@ function _down(e) {
       st.selectedIdx       = nearIdx;
       canvas.style.cursor  = 'ew-resize';
     } else {
-      _addFringe(x);
+      // 즉시 추가 대신 드래그 배치 시작
+      pendingFringeX = x;
+      hoverX = null;
     }
     _render(); _drawBrightnessGraph(); _updateFringeList();
   }
@@ -611,10 +615,15 @@ function _move(e) {
     st.panStart = { clientX: e.clientX, clientY: e.clientY };
     return;
   }
-  // 무늬 추가 모드: 호버 위치 → 그래프에 미리보기 표시
+  // 무늬 추가 모드: 드래그 배치 중이면 pendingFringeX 업데이트, 아니면 호버 미리보기
   if (st.mode === 'add' && !st.isDraggingFringe && !st.isDraggingScan) {
     const nx = _pt(e).x;
-    if (nx !== hoverX) { hoverX = nx; _render(); _drawBrightnessGraph(); }
+    if (pendingFringeX !== null) {
+      pendingFringeX = Math.max(0, Math.min(canvas.width - 1, nx));
+      _render(); _drawBrightnessGraph();
+    } else if (nx !== hoverX) {
+      hoverX = nx; _render(); _drawBrightnessGraph();
+    }
   }
 }
 
@@ -625,12 +634,22 @@ function _up() {
     _render(); _drawBrightnessGraph(); _updateFringeList();
     return;
   }
+  // 드래그 배치 확정
+  if (pendingFringeX !== null) {
+    _addFringe(pendingFringeX);
+    pendingFringeX = null;
+    _render(); _drawBrightnessGraph(); _updateFringeList();
+    return;
+  }
   const wasDraggingScan = st.isDraggingScan;
   st.isDraggingScan = false; st.calibDragIdx = -1;
   if (st.panStart) { st.panStart = null; canvas.style.cursor = 'grab'; }
   if (wasDraggingScan) { _buildEnhanced(st); _render(); }
 }
-function _leave() { _up(); hoverX = null; _render(); _drawBrightnessGraph(); }
+function _leave() {
+  if (pendingFringeX !== null) { pendingFringeX = null; }
+  _up(); hoverX = null; _render(); _drawBrightnessGraph();
+}
 
 function _finalizeFringeDrag() {
   const movedXPx  = st.fringes[st.draggingFringeIdx].xPx;
@@ -701,7 +720,8 @@ function _render() {
 
   _drawFringes();
   _drawDeltaYAnnotation();
-  if (hoverX !== null && st.mode === 'add') _drawHoverOnCanvas(hoverX);
+  if (pendingFringeX !== null && st.mode === 'add') _drawPendingFringe(pendingFringeX);
+  else if (hoverX !== null && st.mode === 'add') _drawHoverOnCanvas(hoverX);
 }
 
 function _drawScanLine() {
@@ -753,6 +773,41 @@ function _drawHoverOnCanvas(x) {
   const s  = 6 * px;
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.beginPath(); ctx.moveTo(x, ty + s); ctx.lineTo(x - s * 0.65, ty); ctx.lineTo(x + s * 0.65, ty); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// 드래그 배치 중인 미확정 무늬 — 실선 노란색 + "손 떼면 확정" 레이블
+function _drawPendingFringe(x) {
+  const px = 1 / (zoom?.scale || 1);
+  ctx.save();
+  // 외곽 어두운 선 (배경 대비)
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth   = px * 4;
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(x, LABEL_AREA_H); ctx.lineTo(x, canvas.height); ctx.stroke();
+  // 밝은 노란색 실선
+  ctx.strokeStyle = '#ffe066';
+  ctx.lineWidth   = px * 2;
+  ctx.beginPath(); ctx.moveTo(x, LABEL_AREA_H); ctx.lineTo(x, canvas.height); ctx.stroke();
+  // 상단 삼각형 포인터
+  const ty = LABEL_AREA_H + 4;
+  const s  = 8 * px;
+  ctx.fillStyle = '#ffe066';
+  ctx.beginPath(); ctx.moveTo(x, ty + s); ctx.lineTo(x - s * 0.65, ty); ctx.lineTo(x + s * 0.65, ty); ctx.closePath(); ctx.fill();
+  // "손 떼면 확정" 안내 레이블
+  const label = '손 떼면 확정';
+  ctx.font = `bold ${Math.round(11 * px)}px sans-serif`;
+  const tw = ctx.measureText(label).width + 10 * px;
+  let lx = x + 8 * px;
+  if (lx + tw > canvas.width) lx = x - tw - 8 * px;
+  const ly = LABEL_AREA_H + 28 * px;
+  ctx.fillStyle = 'rgba(15,25,50,0.88)';
+  if (ctx.roundRect) ctx.roundRect(lx - 2*px, ly - 13*px, tw, 17*px, 3);
+  else ctx.rect(lx - 2*px, ly - 13*px, tw, 17*px);
+  ctx.fill();
+  ctx.fillStyle = '#ffe066';
+  ctx.textAlign = 'left';
+  ctx.fillText(label, lx + 3*px, ly);
   ctx.restore();
 }
 
@@ -905,8 +960,29 @@ function _drawBrightnessGraph(sData) {
   bctx.fillStyle='rgba(80,80,80,0.7)'; bctx.font='9px monospace';
   bctx.fillText(`scan Y: ${Math.round(data.scanY)} ±${data.scanBandH||20}px`, 4, bh - SPECTRUM_H - 3);
 
+  // 드래그 배치 중 pending 선 (무늬 추가 모드, 현재 슬릿만)
+  if (pendingFringeX !== null && st.mode === 'add' && (!sData || sData === st)) {
+    const graphH   = bh - SPECTRUM_H;
+    const hasCrop2 = cropX1 >= 0;
+    const pSrc     = Math.round(pendingFringeX * fXScale);
+    const cropW2   = hasCrop2 ? Math.max(1, cropX1 - cropX0 + 1) : bw;
+    const pGX      = hasCrop2
+      ? Math.round((pSrc - cropX0) / cropW2 * bw)
+      : Math.round(pendingFringeX * bw / (canvas.width || bw));
+    if (pGX >= 0 && pGX <= bw) {
+      bctx.save();
+      bctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      bctx.lineWidth   = 3;
+      bctx.setLineDash([]);
+      bctx.beginPath(); bctx.moveTo(pGX, 0); bctx.lineTo(pGX, graphH); bctx.stroke();
+      bctx.strokeStyle = '#ffe066';
+      bctx.lineWidth   = 1.5;
+      bctx.beginPath(); bctx.moveTo(pGX, 0); bctx.lineTo(pGX, graphH); bctx.stroke();
+      bctx.restore();
+    }
+  }
   // 호버 미리보기선 (무늬 추가 모드, 현재 슬릿만)
-  if (hoverX !== null && st.mode === 'add' && (!sData || sData === st)) {
+  if (pendingFringeX === null && hoverX !== null && st.mode === 'add' && (!sData || sData === st)) {
     const graphH  = bh - SPECTRUM_H;
     const hasCrop2 = cropX1 >= 0;
     // hoverX는 canvas 좌표 → brightCanvas 그래프 x로 변환
