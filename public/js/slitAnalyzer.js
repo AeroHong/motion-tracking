@@ -558,8 +558,8 @@ function _down(e) {
   const { x, y } = _pt(e);
   const iy = y - LABEL_AREA_H;  // 이미지 좌표계 y
 
-  // 스캔 띠 드래그 — 띠 범위 전체를 드래그 영역으로
-  if (iy >= 0 && Math.abs(iy - st.scanY) <= Math.max(16, st.scanBandH || 20)) { st.isDraggingScan = true; return; }
+  // 스캔 띠 드래그 — pan 모드에서만 허용 (add/calibration 등에서 의도치 않게 스캔라인이 움직이는 문제 방지)
+  if (st.mode === 'pan' && iy >= 0 && Math.abs(iy - st.scanY) <= Math.max(16, st.scanBandH || 20)) { st.isDraggingScan = true; return; }
 
   if (st.mode === 'pan') {
     st.panStart = { clientX: e.clientX, clientY: e.clientY };
