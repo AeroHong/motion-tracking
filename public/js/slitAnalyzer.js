@@ -1079,14 +1079,16 @@ function _buildEnhanced(sData) {
   oc2.drawImage(img, 0, 0, dw, dh);
 
   if (ch === 'R' || ch === 'G') {
-    // 채널 신호 추출: 흰색(R=G=B)→0, 해당 색상 레이저→높은 값
+    // 채널 신호 추출: 순수 색상 성분 + 백색도 → 포화된 흰 중앙도 최대값 유지
     const full = oc2.getImageData(0, 0, dw, dh);
     const d    = full.data;
     const sigs = new Float32Array(d.length >> 2);
     for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+      // 순수 색상 성분 + 백색도(포화된 흰 중앙도 최대값으로 인식)
+      const sat = Math.min(d[i], d[i+1], d[i+2]);
       sigs[j] = ch === 'R'
-        ? Math.max(0, d[i]   - Math.max(d[i+1], d[i+2]))
-        : Math.max(0, d[i+1] - Math.max(d[i],   d[i+2]));
+        ? Math.max(0, d[i]   - Math.max(d[i+1], d[i+2])) + sat
+        : Math.max(0, d[i+1] - Math.max(d[i],   d[i+2])) + sat;
     }
     // 스캔 띠 기준 2~98 퍼센타일
     const scanY = Math.max(2, Math.min(dh - 3, Math.round(sData.scanY)));
