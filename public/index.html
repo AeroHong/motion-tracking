@@ -633,6 +633,15 @@
         <div class="slit-image-wrap" id="slit-canvas-wrap">
           <canvas id="slit-canvas" style="touch-action:none;cursor:crosshair;display:block;"></canvas>
         </div>
+        <!-- 선택된 무늬 이동 버튼 — 이미지 외부 영역 -->
+        <div id="slit-nudge-bar" class="slit-nudge-bar hidden">
+          <span id="nudge-fringe-label" class="nudge-label"></span>
+          <button id="nudge-ll"  class="nudge-btn" title="-5px">◀◀</button>
+          <button id="nudge-l"   class="nudge-btn" title="-1px">◀</button>
+          <button id="nudge-r"   class="nudge-btn" title="+1px">▶</button>
+          <button id="nudge-rr"  class="nudge-btn" title="+5px">▶▶</button>
+          <button id="nudge-del" class="nudge-btn nudge-del-btn">✕ 삭제</button>
+        </div>
       </div>
 
       <!-- 우측 사이드바 -->

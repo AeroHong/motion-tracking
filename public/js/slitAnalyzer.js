@@ -6,7 +6,7 @@ import { pickImageFromDrive } from './drivePicker.js';
 
 const $ = id => document.getElementById(id);
 
-const BRIGHT_H    = 220;  // 밝기 그래프 고정 높이 (그래프 클릭으로 무늬 추가)
+let BRIGHT_H    = 220;  // 밝기 그래프 높이 (반응형, _fitCanvas에서 갱신)
 const LABEL_AREA_H = 50;  // 캔버스 상단 레이블 전용 영역 높이
 const SLIT_KEYS = ['A','B','C'];
 
@@ -264,6 +264,25 @@ function _bindAnalyzeUI() {
   $('slit-calib-ok').addEventListener('click', _applyCalib);
   $('slit-calib-value').addEventListener('keydown', e => { if (e.key === 'Enter') _applyCalib(); });
 
+  // ── 너지 버튼 (선택된 무늬 좌우 미세 이동) ──────────────
+  function _nudge(delta) {
+    if (st.selectedIdx < 0 || st.selectedIdx >= st.fringes.length) return;
+    const f = st.fringes[st.selectedIdx];
+    f.xPx = Math.max(0, Math.min((st.canvasW || canvas.width) - 1, f.xPx + delta));
+    const centerXPx = st.centerIdx >= 0 ? st.fringes[st.centerIdx].xPx : null;
+    st.fringes.sort((a, b) => a.xPx - b.xPx);
+    if (centerXPx !== null) st.centerIdx = st.fringes.findIndex(fv => fv.xPx === centerXPx);
+    st.selectedIdx = st.fringes.findIndex(fv => fv.xPx === f.xPx);
+    _updateResults(); _render(); _drawBrightnessGraph(); _updateFringeList();
+  }
+  $('nudge-ll')?.addEventListener('click', () => _nudge(-5));
+  $('nudge-l')?.addEventListener('click',  () => _nudge(-1));
+  $('nudge-r')?.addEventListener('click',  () => _nudge( 1));
+  $('nudge-rr')?.addEventListener('click', () => _nudge( 5));
+  $('nudge-del')?.addEventListener('click', () => {
+    if (st.selectedIdx >= 0) { _deleteFringe(st.selectedIdx); _render(); _drawBrightnessGraph(); _updateFringeList(); _updateResults(); }
+  });
+
   $('slit-sensitivity').addEventListener('input', e => {
     st.sensitivity = +e.target.value;
     $('slit-sensitivity-val').textContent = e.target.value;
@@ -349,6 +368,10 @@ function _switchSlit(key) {
 
 // ── 캔버스 크기 조정 ──────────────────────────────────────
 function _fitCanvas() {
+  // 화면 크기에 따라 그래프 높이 조정
+  const h = window.innerHeight;
+  BRIGHT_H = h < 650 ? 110 : h < 850 ? 150 : 220;
+
   const wrap = $('slit-canvas-wrap');
   const maxW = Math.max(100, (wrap?.offsetWidth  || 700) - 16);
   const maxH = Math.max(100, (wrap?.offsetHeight || 500) - 16 - LABEL_AREA_H);
@@ -566,7 +589,9 @@ function _down(e) {
 
   if (st.mode === 'add') {
     const nearIdx   = _nearFringe(x);
-    const selThresh = Math.max(5 / (zoom?.scale || 1), 1);  // 5 화면 px
+    // 터치 손가락 크기 고려 — 24 screen px → canvas px 변환
+    const screenToCvs = canvas.width / (canvas.getBoundingClientRect().width || canvas.width);
+    const selThresh = Math.max(24 * screenToCvs / (zoom?.scale || 1), 2);
     if (nearIdx >= 0 && Math.abs(st.fringes[nearIdx].xPx - x) < selThresh) {
       st.isDraggingFringe  = true;
       st.draggingFringeIdx = nearIdx;
@@ -1251,6 +1276,21 @@ function _updateFringeList() {
   const list  = $('slit-fringe-list');
   const count = $('slit-fringe-count');
   if (count) count.textContent = st.fringes.length ? `(${st.fringes.length})` : '';
+
+  // 너지 바 표시/숨김
+  const nudgeBar = $('slit-nudge-bar');
+  if (nudgeBar) {
+    const hasSel = st.selectedIdx >= 0 && st.selectedIdx < st.fringes.length;
+    nudgeBar.classList.toggle('hidden', !hasSel);
+    if (hasSel) {
+      const lbl = $('nudge-fringe-label');
+      if (lbl) {
+        const order = _getOrder(st.selectedIdx);
+        lbl.textContent = order === 0 ? '중앙 무늬' : order !== null ? `m=${order>0?'+':''}${order}` : `무늬 ${st.selectedIdx+1}`;
+      }
+    }
+  }
+
   if (!list) return;
 
   if (st.fringes.length === 0) {

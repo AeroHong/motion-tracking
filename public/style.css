@@ -424,6 +424,84 @@ input[type="file"] {
   color: var(--text);
 }
 
+/* ── 너지 바 (선택된 무늬 이동 버튼) ── */
+.slit-nudge-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.slit-nudge-bar.hidden { display: none; }
+.nudge-label {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  flex: 1;
+  min-width: 60px;
+}
+.nudge-btn {
+  min-height: 40px;
+  min-width: 44px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.nudge-btn:active { background: var(--accent); color: #fff; }
+.nudge-del-btn {
+  background: rgba(220,53,69,0.12);
+  border-color: rgba(220,53,69,0.4);
+  color: #dc3545;
+  margin-left: auto;
+}
+.nudge-del-btn:active { background: #dc3545; color: #fff; }
+
+/* ── 모바일 레이아웃 — 태블릿 세로 또는 좁은 화면 ── */
+@media (max-width: 750px) {
+  .slit-main { flex-direction: column; }
+  .slit-sidebar {
+    width: 100%;
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 160px;
+    overflow-y: auto;
+    padding: 4px 6px;
+    gap: 4px;
+  }
+  .sidebar-btn { min-height: 38px; font-size: 12px; flex: 0 0 auto; padding: 0 10px; }
+  .slit-section-title { display: none; }
+  .slit-slider-row { width: 100%; }
+}
+
+/* ── 보정 패널: 모바일에서 화면 하단 floating ── */
+@media (max-width: 900px) {
+  #slit-calib-panel:not(.hidden) {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 300;
+    width: 290px;
+    background: var(--surface2);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 6px 32px rgba(0,0,0,0.55);
+    border: 1px solid rgba(0,229,255,0.35);
+  }
+}
+
 /* 무늬 목록 */
 .slit-count-chip {
   font-size: 11px;
