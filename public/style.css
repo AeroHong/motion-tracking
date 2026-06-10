@@ -1468,25 +1468,68 @@ input[type="file"] {
 }
 
 @media print {
-  #app > *:not(#checklist-modal) { display: none !important; }
-  #checklist-modal {
-    position: static !important;
-    background: white !important;
-    display: flex !important;
-    align-items: flex-start !important;
-    padding: 0 !important;
+  /* 기본: 앱 전체 숨김, print-container만 표시 */
+  body > #app                  { display: none !important; }
+  body > #print-checklist      { display: none !important; }
+  body > #print-slit-report    { display: none !important; }
+
+  /* 체크리스트 인쇄 */
+  body.printing-checklist > #print-checklist {
+    display: block !important;
   }
-  .checklist-box {
+  body.printing-checklist #print-checklist .checklist-box {
     max-height: none !important;
     box-shadow: none !important;
     border: none !important;
     background: white !important;
     color: #111 !important;
   }
-  .checklist-header-btns { display: none !important; }
-  .checklist-section h3 { color: #1a73e8 !important; }
-  .checklist-item:hover { background: none !important; }
-  .checklist-item input[type=checkbox] { accent-color: #1a73e8 !important; }
+  body.printing-checklist .checklist-header-btns { display: none !important; }
+  body.printing-checklist .checklist-section h3  { color: #1a73e8 !important; }
+  body.printing-checklist .checklist-item:hover  { background: none !important; }
+  body.printing-checklist .checklist-item input[type=checkbox] { accent-color: #1a73e8 !important; }
+
+  /* 이중슬릿 보고서 인쇄 */
+  body.printing-slit-report > #print-slit-report {
+    display: block !important;
+  }
+  body.printing-slit-report #print-slit-report {
+    background: #fff;
+    color: #1a1a2e;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    padding: 16px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.printing-slit-report .sr-body {
+    max-width: 100%;
+    padding: 0;
+    gap: 12px;
+  }
+  body.printing-slit-report .sr-slit-block { page-break-inside: avoid; }
+  body.printing-slit-report .sr-section    { page-break-inside: avoid; }
+  /* input, textarea: 값 표시, 인쇄 시 테두리 유지 */
+  body.printing-slit-report input,
+  body.printing-slit-report textarea {
+    border: 1px solid #aaa !important;
+    background: #fff !important;
+    color: #1a1a2e !important;
+    -webkit-appearance: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.printing-slit-report textarea {
+    white-space: pre-wrap !important;
+    overflow: visible !important;
+    height: auto !important;
+    resize: none !important;
+  }
+  body.printing-slit-report .sr-slit-images {
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+  body.printing-slit-report .sr-canvas { max-height: 160px; object-fit: contain; }
 }
 
 /* ── 이중슬릿 보고서 화면 ── */

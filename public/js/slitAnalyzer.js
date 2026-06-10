@@ -1344,7 +1344,7 @@ function _updateResults() {
 // ── 보고서 ───────────────────────────────────────────────
 function _bindReport() {
   $('btn-sr-back').addEventListener('click', () => _show('slit-analyze'));
-  $('btn-sr-save').addEventListener('click', _saveReportPng);
+  $('btn-sr-save').addEventListener('click', _printReport);
   $('sr-date').value = new Date().toISOString().slice(0,10);
 }
 
@@ -1493,57 +1493,48 @@ function _drawBrightnessGraphTo(targetCanvas, targetW, sData, cropToFringes = fa
   );
 }
 
-async function _saveReportPng() {
+function _printReport() {
   const body = $('sr-body');
   if (!body) return;
-  if (typeof html2canvas === 'undefined') {
-    alert('PNG 저장을 위해 html2canvas 라이브러리가 필요합니다.\n브라우저 인쇄(Ctrl+P → PDF 저장)를 이용해주세요.');
-    return;
-  }
 
-  // overflow:auto 컨테이너가 스크롤 영역을 자르지 않도록 임시 해제
-  const scrollWrap = body.parentElement;
-  const prevOverflow  = scrollWrap.style.overflow;
-  const prevMaxHeight = scrollWrap.style.maxHeight;
-  const prevHeight    = scrollWrap.style.height;
-  scrollWrap.style.overflow  = 'visible';
-  scrollWrap.style.maxHeight = 'none';
-  scrollWrap.style.height    = 'auto';
+  // canvas → img 변환 후 clone (복사된 canvas는 내용이 비어있음)
+  const clone = body.cloneNode(true);
+  body.querySelectorAll('canvas').forEach((cv, i) => {
+    const img = document.createElement('img');
+    img.src       = cv.toDataURL('image/png');
+    img.className = cv.className;
+    img.style.cssText = cv.style.cssText;
+    clone.querySelectorAll('canvas')[i].replaceWith(img);
+  });
 
-  try {
-    const cvs = await html2canvas(body, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#fff',
-      scrollX: 0,
-      scrollY: 0,
-      width:  body.scrollWidth,
-      height: body.scrollHeight,
-      windowWidth:  body.scrollWidth,
-      windowHeight: body.scrollHeight,
-    });
-    await new Promise((resolve, reject) => {
-      cvs.toBlob(blob => {
-        if (!blob) { reject(new Error('이미지 생성 실패')); return; }
-        const url = URL.createObjectURL(blob);
-        const a   = document.createElement('a');
-        a.href     = url;
-        a.download = `이중슬릿보고서_${$('sr-name')?.value||'학생'}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-        resolve();
-      }, 'image/png');
-    });
-  } catch(e) {
-    alert('저장 중 오류가 발생했습니다: ' + e.message);
-  } finally {
-    // 원래 스타일 복원
-    scrollWrap.style.overflow  = prevOverflow;
-    scrollWrap.style.maxHeight = prevMaxHeight;
-    scrollWrap.style.height    = prevHeight;
+  // textarea rows를 실제 내용 높이에 맞게 조정
+  body.querySelectorAll('textarea').forEach((ta, i) => {
+    const cloneTa = clone.querySelectorAll('textarea')[i];
+    if (cloneTa) cloneTa.rows = Math.max(ta.rows, ta.value.split('\n').length);
+  });
+
+  // print container를 #app 외부에 생성
+  let container = document.getElementById('print-slit-report');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'print-slit-report';
+    container.style.cssText = 'display:none;';
+    document.body.appendChild(container);
   }
+  container.innerHTML = '';
+  container.appendChild(clone);
+
+  document.body.classList.add('printing-slit-report');
+  window.print();
+
+  const cleanup = () => {
+    document.body.classList.remove('printing-slit-report');
+    container.innerHTML = '';
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  // afterprint가 발생하지 않는 환경 대비 fallback
+  setTimeout(cleanup, 3000);
 }
 
 // ── 이미지 편집기 ─────────────────────────────────────────

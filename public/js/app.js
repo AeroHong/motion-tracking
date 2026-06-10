@@ -202,7 +202,30 @@ $('checklist-modal').addEventListener('change', e => {
 
 $('btn-checklist').addEventListener('click', openChecklistModal);
 $('checklist-close').addEventListener('click', () => $('checklist-modal').classList.add('hidden'));
-$('checklist-print').addEventListener('click', () => window.print());
+$('checklist-print').addEventListener('click', () => {
+  const src = document.querySelector('#checklist-modal .checklist-box');
+  if (!src) { window.print(); return; }
+
+  let container = document.getElementById('print-checklist');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'print-checklist';
+    container.style.display = 'none';
+    document.body.appendChild(container);
+  }
+  container.innerHTML = src.outerHTML;
+
+  document.body.classList.add('printing-checklist');
+  window.print();
+
+  const cleanup = () => {
+    document.body.classList.remove('printing-checklist');
+    container.innerHTML = '';
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(cleanup, 3000);
+});
 $('checklist-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) $('checklist-modal').classList.add('hidden');
 });
