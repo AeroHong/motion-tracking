@@ -1,7 +1,8 @@
 // slitAnalyzer.js — 이중슬릿 간섭무늬 분석 (슬릿 A / B / C)
 
-import { Calibration }    from './calibration.js';
-import { ZoomController } from './zoomController.js';
+import { Calibration }      from './calibration.js';
+import { ZoomController }   from './zoomController.js';
+import { pickImageFromDrive } from './drivePicker.js';
 
 const $ = id => document.getElementById(id);
 
@@ -178,6 +179,23 @@ function _bindUpload() {
       const f = e.target.files[0];
       if (f) _loadImage(k, f);
       e.target.value = '';
+    });
+
+    // 구글 드라이브에서 이미지 선택
+    const driveBtn = $(`slit-ucard-${k}`).querySelector('.slit-drive-btn');
+    driveBtn.addEventListener('click', async () => {
+      driveBtn.disabled = true;
+      driveBtn.textContent = '불러오는 중...';
+      try {
+        const { blob, name } = await pickImageFromDrive();
+        const file = new File([blob], name, { type: blob.type });
+        _loadImage(k, file);
+      } catch (e) {
+        if (e.message !== '취소됨') alert('이미지를 불러올 수 없습니다.\n' + e.message);
+      } finally {
+        driveBtn.disabled = false;
+        driveBtn.textContent = '📂 드라이브';
+      }
     });
   });
 

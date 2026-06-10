@@ -42,6 +42,39 @@ async function getAccessToken() {
   return _token;
 }
 
+// Google Drive에서 이미지 선택 → { blob, name } 반환
+export async function pickImageFromDrive() {
+  const [accessToken] = await Promise.all([getAccessToken(), loadPickerApi()]);
+
+  return new Promise((resolve, reject) => {
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES);
+    view.setIncludeFolders(true);
+
+    const picker = new google.picker.PickerBuilder()
+      .setOAuthToken(accessToken)
+      .setDeveloperKey(DEVELOPER_KEY)
+      .addView(view)
+      .setCallback(async data => {
+        if (data.action === google.picker.Action.CANCEL) {
+          reject(new Error('취소됨'));
+          return;
+        }
+        if (data.action !== google.picker.Action.PICKED) return;
+
+        const { id, name } = data.docs[0];
+        try {
+          const blob = await _download(id, accessToken);
+          resolve({ blob, name });
+        } catch (e) {
+          reject(e);
+        }
+      })
+      .build();
+
+    picker.setVisible(true);
+  });
+}
+
 // Google Drive에서 영상 선택 → { blob, name } 반환
 export async function pickVideoFromDrive() {
   const [accessToken] = await Promise.all([getAccessToken(), loadPickerApi()]);

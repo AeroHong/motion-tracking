@@ -351,6 +351,19 @@ input[type="file"] {
   transition: border-color 0.2s;
 }
 .slit-upload-card.slit-ucard-loaded { border-color: var(--accent); border-style: solid; }
+.slit-btn-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
+}
+.slit-btn-row .btn-ghost,
+.slit-btn-row .btn-secondary {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 8px 4px;
+}
 .slit-upload-label {
   font-weight: 700;
   font-size: 15px;
