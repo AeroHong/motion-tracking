@@ -611,49 +611,59 @@
   <!-- ── 이중슬릿: 분석 화면 ───────────────────────── -->
   <section id="screen-slit-analyze" class="hidden">
 
-    <!-- 슬릿 탭 + 상단 버튼 -->
+    <!-- 상단 탭 + 툴바 -->
     <div class="slit-tab-bar">
       <button id="slit-tab-A" class="slit-tab active" data-key="A">슬릿 A</button>
       <button id="slit-tab-B" class="slit-tab"        data-key="B" disabled>슬릿 B</button>
       <button id="slit-tab-C" class="slit-tab"        data-key="C" disabled>슬릿 C</button>
       <div style="flex:1"></div>
-      <button id="btn-slit-edit-img" class="btn-ghost"      style="min-height:36px;font-size:13px;padding:0 14px;">✏️ 편집</button>
-      <button id="btn-slit-report"  class="btn-secondary" style="min-height:36px;font-size:13px;padding:0 14px;">📄 보고서</button>
-      <button id="btn-slit-back2"   class="btn-ghost"     style="min-height:36px;font-size:13px;padding:0 14px;">← 모드 선택</button>
+      <button id="btn-slit-reupload" class="btn-ghost"    style="min-height:36px;font-size:13px;padding:0 10px;">🖼️ 사진교체</button>
+      <button id="btn-slit-edit-img" class="btn-ghost"    style="min-height:36px;font-size:13px;padding:0 10px;">✏️ 편집</button>
+      <button id="btn-slit-report"   class="btn-secondary" style="min-height:36px;font-size:13px;padding:0 10px;">📄 보고서</button>
+      <button id="btn-slit-back2"    class="btn-ghost"    style="min-height:36px;font-size:13px;padding:0 10px;">← 모드</button>
     </div>
 
-    <!-- 메인: 왼쪽(이미지+그래프) + 오른쪽(사이드바) -->
+    <!-- 메인: 무늬목록(좌) + 이미지(중) + 컨트롤(우) -->
     <div class="slit-main">
 
-      <!-- 왼쪽: 밝기 그래프(위) + 이미지 캔버스(아래) -->
+      <!-- 좌: 무늬 목록 + 결과 (독립 패널) -->
+      <div class="slit-fringe-panel">
+        <div class="slit-section-title">
+          무늬 목록 <span id="slit-fringe-count" class="slit-count-chip"></span>
+        </div>
+        <div id="slit-fringe-list" class="slit-fringe-list"></div>
+        <button id="slit-btn-clear" class="sidebar-btn btn-ghost" style="font-size:11px;min-height:28px;margin-top:2px;">전체 삭제</button>
+        <div class="sidebar-divider"></div>
+        <div class="slit-section-title">📐 결과 (Δy)</div>
+        <div id="slit-results" class="slit-results"></div>
+      </div>
+
+      <!-- 중: 밝기 그래프 + 이미지 캔버스 -->
       <div class="slit-left">
         <div class="slit-bright-wrap">
-          <canvas id="slit-bright-canvas" title="밝기 그래프 — ➕ 모드에서 클릭하면 무늬 추가"></canvas>
+          <canvas id="slit-bright-canvas"></canvas>
         </div>
         <div class="slit-image-wrap" id="slit-canvas-wrap">
-          <canvas id="slit-canvas" style="touch-action:none;cursor:crosshair;display:block;"></canvas>
+          <canvas id="slit-canvas" style="touch-action:none;display:block;"></canvas>
         </div>
-        <!-- 선택된 무늬 이동 버튼 — 이미지 외부 영역 -->
         <div id="slit-nudge-bar" class="slit-nudge-bar hidden">
           <span id="nudge-fringe-label" class="nudge-label"></span>
-          <button id="nudge-ll"  class="nudge-btn" title="-5px">◀◀</button>
-          <button id="nudge-l"   class="nudge-btn" title="-1px">◀</button>
-          <button id="nudge-r"   class="nudge-btn" title="+1px">▶</button>
-          <button id="nudge-rr"  class="nudge-btn" title="+5px">▶▶</button>
+          <button id="nudge-ll"  class="nudge-btn">◀◀</button>
+          <button id="nudge-l"   class="nudge-btn">◀</button>
+          <button id="nudge-r"   class="nudge-btn">▶</button>
+          <button id="nudge-rr"  class="nudge-btn">▶▶</button>
           <button id="nudge-del" class="nudge-btn nudge-del-btn">✕ 삭제</button>
         </div>
       </div>
 
-      <!-- 우측 사이드바 -->
+      <!-- 우: 모드 버튼 + 설정 -->
       <div class="slit-sidebar">
-        <button id="btn-slit-reupload" class="sidebar-btn btn-ghost">🖼️ 사진 교체</button>
-        <div class="sidebar-divider"></div>
-
         <button id="slit-btn-pan"         class="sidebar-btn active">🖐 이동</button>
-        <button id="slit-btn-calibration" class="sidebar-btn">📏 기준 보정</button>
         <button id="slit-btn-add"         class="sidebar-btn">➕ 무늬 추가</button>
+        <button id="slit-btn-drag"        class="sidebar-btn">↔ 무늬 이동</button>
         <button id="slit-btn-setcenter"   class="sidebar-btn">⭕ m=0 지정</button>
-        <div id="slit-mode-hint" class="sidebar-hint-text" style="min-height:28px;font-size:11px;color:var(--text-dim);"></div>
+        <button id="slit-btn-calibration" class="sidebar-btn">📏 기준 보정</button>
+        <div id="slit-mode-hint" class="sidebar-hint-text"></div>
 
         <div id="slit-calib-panel" class="slit-calib-panel hidden">
           <div class="slit-calib-label">두 점 사이 실제 길이 (cm)</div>
@@ -664,7 +674,6 @@
         </div>
 
         <div class="sidebar-divider"></div>
-
         <div class="slit-section-title">🎨 색상 채널</div>
         <div id="slit-channel-btns" class="slit-ch-btns">
           <button class="slit-ch-btn active" data-ch="lum">전체</button>
@@ -674,7 +683,6 @@
         <button id="btn-auto-enhance" class="sidebar-btn btn-secondary" style="margin-top:4px;">✨ 자동 보정 ON</button>
 
         <div class="sidebar-divider"></div>
-
         <div class="slit-section-title">📡 자동 감지</div>
         <div class="slit-slider-row">
           <label>감도</label>
@@ -687,19 +695,6 @@
           <span id="slit-bandh-val">20</span>
         </div>
         <button id="slit-btn-detect" class="sidebar-btn btn-primary">🔍 자동 감지</button>
-
-        <div class="sidebar-divider"></div>
-
-        <div class="slit-section-title">
-          무늬 목록 <span id="slit-fringe-count" class="slit-count-chip"></span>
-        </div>
-        <div id="slit-fringe-list" class="slit-fringe-list"></div>
-        <button id="slit-btn-clear" class="sidebar-btn btn-ghost" style="font-size:11px;min-height:28px;margin-top:2px;">전체 삭제</button>
-
-        <div class="sidebar-divider"></div>
-
-        <div class="slit-section-title">📐 측정 결과 (Δy)</div>
-        <div id="slit-results" class="slit-results"></div>
       </div>
     </div>
   </section>

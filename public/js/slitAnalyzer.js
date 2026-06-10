@@ -253,6 +253,7 @@ function _bindAnalyzeUI() {
   $('slit-btn-pan').addEventListener('click',         () => _setMode('pan'));
   $('slit-btn-calibration').addEventListener('click', () => _setMode('calibration'));
   $('slit-btn-add').addEventListener('click',         () => _setMode('add'));
+  $('slit-btn-drag').addEventListener('click',        () => _setMode('drag'));
   $('slit-btn-setcenter').addEventListener('click',   () => _setMode('setcenter'));
   $('slit-btn-detect').addEventListener('click',      _autoDetect);
 
@@ -370,11 +371,11 @@ function _switchSlit(key) {
 function _fitCanvas() {
   // 화면 크기에 따라 그래프 높이 조정
   const h = window.innerHeight;
-  BRIGHT_H = h < 650 ? 110 : h < 850 ? 150 : 220;
+  BRIGHT_H = h < 700 ? 70 : h < 900 ? 85 : 100;
 
   const wrap = $('slit-canvas-wrap');
-  const maxW = Math.max(100, (wrap?.offsetWidth  || 700) - 16);
-  const maxH = Math.max(100, (wrap?.offsetHeight || 500) - 16 - LABEL_AREA_H);
+  const maxW = Math.max(100, (wrap?.offsetWidth  || 700) - 2);
+  const maxH = Math.max(100, (wrap?.offsetHeight || 500) - 2 - LABEL_AREA_H);
   const img  = st.imgEl;
   if (!img) return;
   const ratio  = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
@@ -405,17 +406,19 @@ function _fitCanvas() {
 // ── 모드 ─────────────────────────────────────────────────
 function _setMode(mode) {
   st.mode = mode;
-  ['pan','calibration','add','setcenter'].forEach(m =>
+  ['pan','calibration','add','drag','setcenter'].forEach(m =>
     $(`slit-btn-${m}`)?.classList.toggle('active', m === mode)
   );
   const hints = {
     pan:         '핀치/휠로 확대 · 드래그로 이동',
     calibration: '자(ruler)의 두 점 클릭 → 실제 길이 입력',
-    add:         '이미지 또는 그래프 클릭 → 무늬 추가 / 재클릭 → 삭제',
+    add:         '손 떼면 무늬 추가 확정 (누른 채 드래그로 조정)',
+    drag:        '무늬 선 위에서 드래그하여 이동',
     setcenter:   '중앙 밝은 무늬(m=0)를 클릭하여 선택하세요',
   };
   $('slit-mode-hint').textContent = hints[mode] || '';
-  canvas.style.cursor       = (mode === 'add' || mode === 'calibration' || mode === 'setcenter') ? 'crosshair' : 'grab';
+  canvas.style.cursor       = (mode === 'add' || mode === 'calibration' || mode === 'setcenter') ? 'crosshair'
+                             : mode === 'drag' ? 'ew-resize' : 'grab';
   brightCanvas.style.cursor = (mode === 'add' || mode === 'setcenter') ? 'crosshair' : 'default';
 
   if (mode !== 'calibration') {
@@ -587,21 +590,25 @@ function _down(e) {
     return;
   }
 
-  if (st.mode === 'add') {
-    const nearIdx   = _nearFringe(x);
-    // 터치 손가락 크기 고려 — 24 screen px → canvas px 변환
+  // ↔ 무늬 이동 모드: 가까운 무늬만 드래그
+  if (st.mode === 'drag') {
+    const nearIdx = _nearFringe(x);
     const screenToCvs = canvas.width / (canvas.getBoundingClientRect().width || canvas.width);
-    const selThresh = Math.max(24 * screenToCvs / (zoom?.scale || 1), 2);
+    const selThresh = Math.max(28 * screenToCvs / (zoom?.scale || 1), 3);
     if (nearIdx >= 0 && Math.abs(st.fringes[nearIdx].xPx - x) < selThresh) {
       st.isDraggingFringe  = true;
       st.draggingFringeIdx = nearIdx;
       st.selectedIdx       = nearIdx;
       canvas.style.cursor  = 'ew-resize';
-    } else {
-      // 즉시 추가 대신 드래그 배치 시작
-      pendingFringeX = x;
-      hoverX = null;
+      _render(); _drawBrightnessGraph(); _updateFringeList();
     }
+    return;
+  }
+
+  if (st.mode === 'add') {
+    // 드래그 배치 시작 (손 떼면 확정)
+    pendingFringeX = x;
+    hoverX = null;
     _render(); _drawBrightnessGraph(); _updateFringeList();
   }
 }
@@ -874,6 +881,26 @@ function _drawFringes() {
     ctx.lineWidth = (isCenter||isSel) ? px * 1.5 : px;
     ctx.beginPath(); ctx.moveTo(f.xPx, LABEL_AREA_H); ctx.lineTo(f.xPx, canvas.height); ctx.stroke();
     ctx.setLineDash([]);
+
+    // 드래그 핸들: drag 모드 또는 이동 중에 이미지 상단에 원형 핸들 표시
+    if (st.mode === 'drag' || (st.isDraggingFringe && st.draggingFringeIdx === i)) {
+      const hY = LABEL_AREA_H + 8;
+      const hr = Math.max(5, 6 * px);
+      ctx.fillStyle = isSel ? '#00e5ff' : isCenter ? '#ff6b35' : 'rgba(0,207,255,0.75)';
+      ctx.beginPath();
+      ctx.arc(f.xPx, hY, hr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = px;
+      ctx.setLineDash([]);
+      ctx.stroke();
+      // 좌우 화살표 표시
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.round(Math.max(8, 8 * px))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('↔', f.xPx, hY);
+    }
 
     // 레이블: 중앙(m=0)과 바로 옆 2개(m=±1)만 표시
     let label = null;
