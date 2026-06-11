@@ -66,7 +66,7 @@ import { doc, getDoc, setDoc }
 import { ZoomController }  from './zoomController.js';
 import { makeDraggable }   from './utils.js';
 import { initFreeMotion }    from './freeMotion.js';
-import { initSlitAnalyzer }  from './slitAnalyzer.js';
+import { initSlitAnalyzer, refreshSlitExperiments }  from './slitAnalyzer.js';
 import { VideoController }    from './video.js';
 import { Calibration }        from './calibration.js';
 import { Tracker }            from './tracker.js';
@@ -233,7 +233,7 @@ $('checklist-modal').addEventListener('click', e => {
 // 모드 선택
 $('btn-card-classic').addEventListener('click', () => { showScreen('upload'); checkPrevReport(); });
 $('btn-card-free').addEventListener('click',    () => showScreen('free-upload'));
-$('btn-card-slit').addEventListener('click',    () => showScreen('slit-upload'));
+$('btn-card-slit').addEventListener('click',    () => { showScreen('slit-upload'); refreshSlitExperiments(); });
 $('btn-back-mode').addEventListener('click',    () => showScreen('mode'));
 
 // freeMotion 모듈 초기화

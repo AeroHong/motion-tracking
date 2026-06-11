@@ -51,6 +51,8 @@ let activeKey = 'A';
 let st = slitStates.A;   // 활성 슬릿 상태 참조
 
 let canvas, ctx, brightCanvas, zoom, _show;
+let _currentExpDocId = null;   // 현재 세션의 저장된 실험 문서 ID (덮어쓰기용)
+let _currentExpId    = null;   // 현재 세션의 expId (Storage 경로용)
 
 // 밝기 그래프 가로 줌/패닝 뷰포트 (0..1 범위)
 const brightVP = { scale: 1, offset: 0, dragX: null, dragOff: 0 };
@@ -59,6 +61,8 @@ const brightVP = { scale: 1, offset: 0, dragX: null, dragOff: 0 };
 let hoverX = null;
 // 터치/드래그 배치 중인 미확정 무늬 x (null이면 없음)
 let pendingFringeX = null;
+
+export function refreshSlitExperiments() { _refreshExperimentList(); }
 
 // ── 초기화 ────────────────────────────────────────────────
 export function initSlitAnalyzer(showScreen) {
@@ -247,6 +251,9 @@ async function _loadImage(key, file) {
     s.imgEl      = img;
     s.originalImg = img;        // 원본 보존
     s.editParams  = null;       // 편집 파라미터 초기화
+    // 새 이미지 업로드 → 새 실험으로 간주하고 세션 ID 초기화
+    _currentExpDocId = null;
+    _currentExpId    = null;
     const prev = $(`slit-preview-${key}`);
     prev.src = url;
     prev.classList.remove('hidden');
@@ -391,7 +398,7 @@ function _switchSlit(key) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       _fitCanvas();
-      _buildEnhanced(st);
+      try { _buildEnhanced(st); } catch(e) { st._enhancedCanvas = null; }
       _render();
       _drawBrightnessGraph();
       _updateFringeList();
@@ -487,13 +494,14 @@ function _readBrightness(sData) {
   const oc   = document.createElement('canvas');
   oc.width   = bw;
   oc.height  = imgH;
-  oc.getContext('2d').drawImage(img, 0, 0, bw, imgH);
+  const oc2d = oc.getContext('2d');
+  try { oc2d.drawImage(img, 0, 0, bw, imgH); } catch(e) { return null; }
   const bandH  = sData?.scanBandH ?? st.scanBandH ?? 20;
   const scanY  = Math.max(0, Math.min(imgH - 1, Math.round((sData?.scanY ?? st.scanY))));
   const sy1    = Math.max(0, scanY - bandH);
   const sy2    = Math.min(imgH - 1, scanY + bandH);
   const rows   = sy2 - sy1 + 1;
-  const d      = oc.getContext('2d').getImageData(0, sy1, bw, rows).data;
+  let d; try { d = oc2d.getImageData(0, sy1, bw, rows).data; } catch(e) { return null; }
   const bright = new Float32Array(bw);
   // 열별 최대값(column max) → 무늬가 기울거나 곡선이어도 피크를 정확히 잡음
   for (let x = 0; x < bw; x++) {
@@ -1255,11 +1263,11 @@ function _buildEnhanced(sData) {
   const oc = document.createElement('canvas');
   oc.width = dw; oc.height = dh;
   const oc2 = oc.getContext('2d');
-  oc2.drawImage(img, 0, 0, dw, dh);
+  try { oc2.drawImage(img, 0, 0, dw, dh); } catch(e) { sData._enhancedCanvas = null; return; }
 
   if (ch === 'R' || ch === 'G') {
     // 채널 신호 추출: 순수 색상 성분 + 백색도 → 포화된 흰 중앙도 최대값 유지
-    const full = oc2.getImageData(0, 0, dw, dh);
+    let full; try { full = oc2.getImageData(0, 0, dw, dh); } catch(e) { sData._enhancedCanvas = null; return; }
     const d    = full.data;
     const sigs = new Float32Array(d.length >> 2);
     for (let i = 0, j = 0; i < d.length; i += 4, j++) {
@@ -1296,7 +1304,7 @@ function _buildEnhanced(sData) {
   const scanY = Math.max(2, Math.min(dh - 3, Math.round(sData.scanY)));
   const sy1   = Math.max(0, scanY - 50);
   const sy2   = Math.min(dh - 1, scanY + 50);
-  const strip = oc2.getImageData(0, sy1, dw, sy2 - sy1 + 1).data;
+  let strip; try { strip = oc2.getImageData(0, sy1, dw, sy2 - sy1 + 1).data; } catch(e) { sData._enhancedCanvas = null; return; }
   const lums  = new Float32Array(strip.length >> 2);
   for (let i = 0, j = 0; i < strip.length; i += 4, j++)
     lums[j] = strip[i] * 0.299 + strip[i+1] * 0.587 + strip[i+2] * 0.114;
@@ -1306,7 +1314,8 @@ function _buildEnhanced(sData) {
 
   if (hi - lo >= 200) { sData._enhancedCanvas = oc; return; }  // 이미 충분한 대비
 
-  const full   = oc2.getImageData(0, 0, dw, dh);
+  let full2; try { full2 = oc2.getImageData(0, 0, dw, dh); } catch(e) { sData._enhancedCanvas = null; return; }
+  const full = full2;
   const d      = full.data;
   const scale = 210 / Math.max(1, hi - lo);
   for (let i = 0; i < d.length; i += 4) {
@@ -1742,26 +1751,24 @@ async function _saveExperiment() {
   if (btn) { btn.disabled = true; btn.textContent = '💾 저장 중…'; }
 
   try {
-    // 임시 ID로 Storage 경로 결정
-    const expId = `exp_${Date.now()}`;
+    // 첫 저장이면 새 ID, 이후엔 같은 ID로 덮어쓰기
+    const expId = _currentExpId || `exp_${Date.now()}`;
     const imageUrls = {};
 
     for (const key of SLIT_KEYS) {
       const s = slitStates[key];
       if (!s.imgEl) continue;
 
-      // 이미지 → blob (JPEG 압축)
       const oc = new OffscreenCanvas(s.imgEl.naturalWidth, s.imgEl.naturalHeight);
       oc.getContext('2d').drawImage(s.imgEl, 0, 0);
       const blob = await oc.convertToBlob({ type: 'image/jpeg', quality: 0.80 });
 
-      const path = `reports/${user.uid}/slit/${expId}/${key}.jpg`;
-      const sRef = storageRef(storage, path);
+      // 같은 경로로 uploadBytes → Storage 파일 자동 덮어쓰기
+      const sRef = storageRef(storage, `slit/${user.uid}/${expId}/${key}.jpg`);
       await uploadBytes(sRef, blob);
       imageUrls[key] = await getDownloadURL(sRef);
     }
 
-    // 분석 상태 직렬화
     const slitsData = {};
     SLIT_KEYS.forEach(key => {
       const s = slitStates[key];
@@ -1780,28 +1787,38 @@ async function _saveExperiment() {
       };
     });
 
-    // 보고서 필드
     const reportData = {};
     _REPORT_FIELDS.forEach(id => {
       const el = $(id);
       if (el) reportData[id.replace(/-/g, '_')] = el.value;
     });
 
-    const colRef = _expColRef();
-    await addDoc(colRef, {
+    const payload = {
       expId,
       name: _getExperimentName(),
-      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
       imageUrls,
       slits: slitsData,
       reportData,
-    });
+    };
+
+    if (_currentExpDocId) {
+      // 기존 문서 덮어쓰기
+      await setDoc(doc(db, 'sessions', user.uid, 'slit_experiments', _currentExpDocId), payload, { merge: false });
+    } else {
+      // 최초 저장 — 새 문서 생성
+      payload.createdAt = Timestamp.now();
+      const docRef = await addDoc(_expColRef(), payload);
+      _currentExpDocId = docRef.id;
+      _currentExpId    = expId;
+    }
 
     alert('✅ 실험이 저장되었습니다!');
+    _refreshExperimentList();
 
   } catch (e) {
     console.error('실험 저장 실패:', e);
-    alert('저장 실패: ' + e.message);
+    alert('저장 실패: ' + (e?.message || String(e)));
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = origText; }
   }
@@ -1827,7 +1844,7 @@ async function _loadExperiment(expDoc) {
   const btn = document.querySelector(`[data-load-id="${expDoc.id}"]`);
   if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
 
-  const blobUrls = [];   // 나중에 revokeObjectURL할 목록
+  const blobUrls = [];
 
   try {
     SLIT_KEYS.forEach(k => { slitStates[k] = _mkState(k); });
@@ -1837,17 +1854,17 @@ async function _loadExperiment(expDoc) {
       const imgUrl   = expDoc.imageUrls?.[key];
       if (!slitData || !imgUrl) continue;
 
-      // fetch → blob URL 로 변환 (CORS / tainted-canvas 문제 해결)
-      let srcUrl = imgUrl;
+      // fetch → blob URL (CORS 설정 후 동작, 동일출처로 변환 → canvas 작업 가능)
+      let srcUrl;
       try {
         const res = await fetch(imgUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         srcUrl = URL.createObjectURL(blob);
         blobUrls.push(srcUrl);
-      } catch (fetchErr) {
-        console.warn(`fetch 실패 (슬릿 ${key}), 직접 URL 사용:`, fetchErr);
-        // fetch 실패 시 원본 URL로 폴백
+      } catch (e) {
+        console.warn(`이미지 fetch 실패 (슬릿 ${key}):`, e);
+        srcUrl = imgUrl;
       }
 
       const img = await new Promise((resolve, reject) => {
@@ -1895,11 +1912,14 @@ async function _loadExperiment(expDoc) {
       });
     }
 
+    // 불러온 실험을 현재 세션으로 설정 → 재저장 시 같은 문서 덮어쓰기
+    _currentExpDocId = expDoc.id;
+    _currentExpId    = expDoc.expId;
+
     alert(`✅ "${expDoc.name}" 실험을 불러왔습니다.`);
 
   } catch (e) {
     console.error('실험 불러오기 실패:', e);
-    // blob URL 정리
     blobUrls.forEach(u => URL.revokeObjectURL(u));
     alert('불러오기 실패: ' + (e?.message || String(e)));
   } finally {
@@ -1913,20 +1933,18 @@ async function _deleteExperiment(expDoc) {
   if (!user) return;
 
   try {
-    // Storage 이미지 삭제 시도
+    // Storage 이미지 삭제
     for (const key of SLIT_KEYS) {
-      const imgUrl = expDoc.imageUrls?.[key];
-      if (!imgUrl) continue;
+      if (!expDoc.imageUrls?.[key]) continue;
       try {
-        const sRef = storageRef(storage, `reports/${user.uid}/slit/${expDoc.expId}/${key}.jpg`);
-        await deleteObject(sRef);
+        await deleteObject(storageRef(storage, `slit/${user.uid}/${expDoc.expId}/${key}.jpg`));
       } catch (_) { /* 이미 없을 수 있음 */ }
     }
     // Firestore 문서 삭제
     await deleteDoc(doc(db, 'sessions', user.uid, 'slit_experiments', expDoc.id));
     await _refreshExperimentList();
   } catch (e) {
-    alert('삭제 실패: ' + e.message);
+    alert('삭제 실패: ' + (e?.message || String(e)));
   }
 }
 
@@ -2699,64 +2717,74 @@ function _projectionScore(octx, img, W, H, angleDeg) {
 }
 
 // ── 편집 적용 ────────────────────────────────────────────
-function _applyEdits() {
+async function _applyEdits() {
   const img = edSt.originalImg;
   if (!img) { _closeEditor(); return; }
 
-  const W = img.naturalWidth, H = img.naturalHeight;
-  const angle = edSt.angle, b = edSt.brightness, c = edSt.contrast;
-  const crop = edSt.cropFrac;
+  const okBtn = $('btn-editor-ok');
+  if (okBtn) { okBtn.disabled = true; okBtn.textContent = '⏳ 처리 중...'; }
 
-  const oc1 = new OffscreenCanvas(W, H);
-  const c1  = oc1.getContext('2d');
-  c1.translate(W / 2, H / 2);
-  c1.rotate(angle * Math.PI / 180);
-  c1.drawImage(img, -W / 2, -H / 2);
+  try {
+    const W = img.naturalWidth, H = img.naturalHeight;
+    const angle = edSt.angle, b = edSt.brightness, c = edSt.contrast;
+    const crop = edSt.cropFrac;
 
-  // 크롭 영역 계산
-  const srcX = crop ? Math.round(crop.x0 * W) : 0;
-  const srcY = crop ? Math.round(crop.y0 * H) : 0;
-  const srcW = crop ? Math.max(1, Math.round((crop.x1 - crop.x0) * W)) : W;
-  const srcH = crop ? Math.max(1, Math.round((crop.y1 - crop.y0) * H)) : H;
+    const oc1 = new OffscreenCanvas(W, H);
+    const c1  = oc1.getContext('2d');
+    c1.translate(W / 2, H / 2);
+    c1.rotate(angle * Math.PI / 180);
+    c1.drawImage(img, -W / 2, -H / 2);
 
-  const oc2 = new OffscreenCanvas(srcW, srcH);
-  const c2  = oc2.getContext('2d');
-  c2.drawImage(oc1, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+    const srcX = crop ? Math.round(crop.x0 * W) : 0;
+    const srcY = crop ? Math.round(crop.y0 * H) : 0;
+    const srcW = crop ? Math.max(1, Math.round((crop.x1 - crop.x0) * W)) : W;
+    const srcH = crop ? Math.max(1, Math.round((crop.y1 - crop.y0) * H)) : H;
 
-  // 픽셀 단위 밝기/대비 적용
-  if (b !== 0 || c !== 0) {
-    const id = c2.getImageData(0, 0, srcW, srcH);
-    const d  = id.data;
-    const bf = b * 2.55;
-    const cf = c > 0 ? 1 + c / 50 : Math.max(0.01, 1 + c / 100);
-    for (let i = 0; i < d.length; i += 4) {
-      for (let ch = 0; ch < 3; ch++) {
-        d[i+ch] = Math.max(0, Math.min(255, (d[i+ch] - 128) * cf + 128 + bf));
+    const oc2 = new OffscreenCanvas(srcW, srcH);
+    const c2  = oc2.getContext('2d');
+    c2.drawImage(oc1, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+
+    if (b !== 0 || c !== 0) {
+      const id = c2.getImageData(0, 0, srcW, srcH);
+      const d  = id.data;
+      const bf = b * 2.55;
+      const cf = c > 0 ? 1 + c / 50 : Math.max(0.01, 1 + c / 100);
+      for (let i = 0; i < d.length; i += 4) {
+        for (let ch = 0; ch < 3; ch++) {
+          d[i+ch] = Math.max(0, Math.min(255, (d[i+ch] - 128) * cf + 128 + bf));
+        }
       }
+      c2.putImageData(id, 0, 0);
     }
-    c2.putImageData(id, 0, 0);
+
+    const blob = await oc2.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+    const url  = URL.createObjectURL(blob);
+
+    await new Promise((resolve, reject) => {
+      const newImg = new Image();
+      newImg.onload = () => {
+        const s = slitStates[editorKey];
+        s.imgEl = newImg;
+        s.editParams = { angle, brightness: b, contrast: c, cropFrac: crop ? { ...crop } : null };
+        _resetAnalysis(s);
+
+        const prev = $(`slit-preview-${editorKey}`);
+        if (prev) { prev.src = url; prev.classList.remove('hidden'); }
+
+        if (!$('screen-slit-analyze').classList.contains('hidden') && activeKey === editorKey) {
+          _switchSlit(editorKey);
+        }
+        resolve();
+      };
+      newImg.onerror = () => reject(new Error('편집된 이미지 로드 실패'));
+      newImg.src = url;
+    });
+
+    _closeEditor();
+  } catch (e) {
+    console.error('편집 적용 실패:', e);
+    alert('편집 적용 실패: ' + (e?.message || String(e)) + '\n\n이미지를 다시 불러온 후 시도해 주세요.');
+  } finally {
+    if (okBtn) { okBtn.disabled = false; okBtn.textContent = '✓ 적용'; }
   }
-
-  oc2.convertToBlob({ type: 'image/jpeg', quality: 0.95 }).then(blob => {
-    const url = URL.createObjectURL(blob);
-    const newImg = new Image();
-    newImg.onload = () => {
-      const s = slitStates[editorKey];
-      s.imgEl = newImg;
-      s.editParams = { angle, brightness: b, contrast: c, cropFrac: crop ? { ...crop } : null };
-      _resetAnalysis(s);
-
-      // 업로드 카드 미리보기 갱신
-      const prev = $(`slit-preview-${editorKey}`);
-      if (prev) { prev.src = url; prev.classList.remove('hidden'); }
-
-      // 분석 화면이 열려 있고 같은 슬릿이면 갱신
-      if (!$('screen-slit-analyze').classList.contains('hidden') && activeKey === editorKey) {
-        _switchSlit(editorKey);
-      }
-
-      _closeEditor();
-    };
-    newImg.src = url;
-  });
 }

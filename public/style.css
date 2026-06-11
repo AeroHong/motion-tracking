@@ -1998,6 +1998,7 @@ input[type="file"] {
   display: flex;
   gap: 8px;
 }
+.editor-footer button { white-space: nowrap; min-width: 0; }
 
 /* 업로드 카드 편집 버튼 */
 .slit-edit-upload-btn {
