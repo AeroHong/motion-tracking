@@ -3,6 +3,11 @@
 import { Calibration }      from './calibration.js';
 import { ZoomController }   from './zoomController.js';
 import { pickImageFromDrive } from './drivePicker.js';
+import { auth, db, storage } from './auth.js';
+import { doc, getDoc, setDoc, Timestamp, collection, addDoc, getDocs, deleteDoc, query, orderBy }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 const $ = id => document.getElementById(id);
 
@@ -165,11 +170,17 @@ export function initSlitAnalyzer(showScreen) {
   _bindAnalyzeUI();
   _bindReport();
   _bindEditor();
+
+  // 로그인 후 업로드 화면 진입 시 실험 목록 로드
+  auth.onAuthStateChanged(user => {
+    if (user) _refreshExperimentList();
+  });
 }
 
 // ── 업로드 화면 ──────────────────────────────────────────
 function _bindUpload() {
   $('btn-slit-back').addEventListener('click', () => _show('mode'));
+  $('btn-slit-exp-refresh')?.addEventListener('click', _refreshExperimentList);
 
   SLIT_KEYS.forEach(k => {
     const fileInput = $(`slit-file-${k}`);
@@ -209,8 +220,26 @@ function _bindUpload() {
   });
 }
 
-function _loadImage(key, file) {
-  const url = URL.createObjectURL(file);
+async function _loadImage(key, file) {
+  let targetFile = file;
+
+  // HEIC/HEIF 감지 → JPEG 변환
+  const isHeic = file.type === 'image/heic' || file.type === 'image/heif' ||
+                 /\.(heic|heif)$/i.test(file.name);
+  if (isHeic) {
+    $(`slit-filename-${key}`).textContent = '⏳ HEIC 변환 중…';
+    try {
+      const converted = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+      const blob = Array.isArray(converted) ? converted[0] : converted;
+      targetFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' });
+    } catch (e) {
+      console.error('HEIC 변환 실패:', e);
+      $(`slit-filename-${key}`).textContent = '❌ HEIC 변환 실패 — JPEG로 저장 후 업로드하세요';
+      return;
+    }
+  }
+
+  const url = URL.createObjectURL(targetFile);
   const img = new Image();
   img.onload = () => {
     const s = slitStates[key];
@@ -221,7 +250,7 @@ function _loadImage(key, file) {
     const prev = $(`slit-preview-${key}`);
     prev.src = url;
     prev.classList.remove('hidden');
-    $(`slit-filename-${key}`).textContent = `✓ ${file.name}`;
+    $(`slit-filename-${key}`).textContent = `✓ ${targetFile.name}`;
     $(`slit-ucard-${key}`).classList.add('slit-ucard-loaded');
     $(`slit-edit-upload-${key}`)?.classList.remove('hidden');
     $('btn-slit-start').disabled = !SLIT_KEYS.some(k => slitStates[k].imgEl);
@@ -245,9 +274,13 @@ function _bindAnalyzeUI() {
   $('btn-slit-back2').addEventListener('click', () => _show('mode'));
   $('btn-slit-reupload').addEventListener('click', () => _show('slit-upload'));
   $('btn-slit-edit-img').addEventListener('click', () => { if (st.imgEl) _openEditor(activeKey); });
+  $('btn-slit-save-exp')?.addEventListener('click', _saveExperiment);
   $('btn-slit-report').addEventListener('click', () => {
     _show('slit-report');
-    requestAnimationFrame(() => _buildReport());
+    requestAnimationFrame(() => {
+      _buildReport();
+      _loadReportData();
+    });
   });
 
   $('slit-btn-pan').addEventListener('click',         () => _setMode('pan'));
@@ -1408,11 +1441,556 @@ function _updateResults() {
     ${!st.calib.isCalibrated ? '<div class="slit-calib-warn">⚠️ 📏 보정 후 cm 단위로 표시됩니다.</div>' : ''}`;
 }
 
+// ── 보고서 DB 저장/불러오기 ──────────────────────────────────
+const _REPORT_FIELDS = [
+  'sr-name', 'sr-number', 'sr-class', 'sr-date',
+  'sr-L',
+  'sr-d-A', 'sr-d-B', 'sr-d-C',
+  'sr-lambda-A', 'sr-lambda-B', 'sr-lambda-C',
+  'sr-observation', 'sr-q1', 'sr-q2', 'sr-q3',
+];
+
+function _reportDocRef() {
+  const user = auth.currentUser;
+  if (!user) return null;
+  return doc(db, 'sessions', user.uid, 'slit_report', 'latest');
+}
+
+async function _saveReportData() {
+  const ref = _reportDocRef();
+  if (!ref) return;
+  const data = { updatedAt: Timestamp.now() };
+  _REPORT_FIELDS.forEach(id => {
+    const el = $(id);
+    if (el) data[id.replace(/-/g, '_')] = el.value;
+  });
+  try { await setDoc(ref, data, { merge: true }); }
+  catch (e) { console.warn('보고서 저장 실패:', e); }
+}
+
+async function _loadReportData() {
+  const ref = _reportDocRef();
+  if (!ref) return;
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data();
+    _REPORT_FIELDS.forEach(id => {
+      const key = id.replace(/-/g, '_');
+      const el = $(id);
+      if (el && data[key] !== undefined) el.value = data[key];
+    });
+  } catch (e) { console.warn('보고서 불러오기 실패:', e); }
+}
+
+// ── 파일명 헬퍼 ──────────────────────────────────────────
+function _getReportFilename() {
+  const num  = $('sr-number')?.value?.trim() || '';
+  const name = $('sr-name')?.value?.trim() || '';
+  const suffix = num + name;   // 예: "10101홍길동"
+  return suffix ? `이중슬릿_보고서_${suffix}` : '이중슬릿_보고서';
+}
+
+// ── PNG 저장 (html2canvas 기반 — Android 포함 전 기기 동작) ──
+async function _downloadPng() {
+  const btn = $('btn-sr-save-png');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 생성 중…'; }
+
+  try {
+    const body = $('sr-body');
+    const clone = body.cloneNode(true);
+
+    // 모든 스냅샷을 replaceWith 전에 취함
+    const origCanvases = Array.from(body.querySelectorAll('canvas'));
+    const cloneCanvases = Array.from(clone.querySelectorAll('canvas'));
+    const origInputs    = Array.from(body.querySelectorAll('input'));
+    const cloneInputs   = Array.from(clone.querySelectorAll('input'));
+    const origTAs       = Array.from(body.querySelectorAll('textarea'));
+    const cloneTAs      = Array.from(clone.querySelectorAll('textarea'));
+
+    // 1. canvas → img
+    origCanvases.forEach((cv, i) => {
+      const cloneCv = cloneCanvases[i];
+      if (!cloneCv) return;
+      const img = document.createElement('img');
+      try { img.src = cv.toDataURL('image/png'); } catch (_) {}
+      img.className = cv.className;
+      img.style.cssText = cv.style.cssText + ';display:block;max-width:100%;';
+      cloneCv.replaceWith(img);
+    });
+
+    // 2. 라이트 테마 먼저 적용 (이후 교체 div 인라인 스타일로 덮어쓸 수 있도록)
+    clone.style.cssText = 'background:#fff;color:#1a1a2e;padding:20px;max-width:none;width:800px;' +
+      '--bg:#fff;--bg-surface:#f4f6fa;--bg-card:#f4f6fa;--text:#1a1a2e;--text-dim:#555;--border:#ccc;';
+    clone.querySelectorAll('*').forEach(el => { el.style.color = '#1a1a2e'; });
+    clone.querySelectorAll('.sr-slit-block,.sr-section,.sr-header-section').forEach(el => {
+      el.style.background = '#f4f6fa';
+      el.style.border = '1px solid #ccc';
+    });
+    clone.querySelectorAll('.sr-slit-title,.sr-img-label,.sr-q-label,.sr-dy-row,.sr-dy-val').forEach(el => {
+      el.style.color = '#1a1a2e';
+    });
+
+    // 3. input → div 교체 (html2canvas는 input 내부 텍스트를 width로 잘라냄)
+    origInputs.forEach((el, i) => {
+      const ci = cloneInputs[i];
+      if (!ci) return;
+      const div = document.createElement('div');
+      div.className = ci.className;
+      const hasVal = el.value !== '';
+      div.textContent = hasVal ? el.value : (el.placeholder || '');
+      div.style.cssText =
+        'border:1px solid #aaa;border-radius:3px;padding:4px 6px;' +
+        'background:#fff!important;' +
+        (hasVal ? 'color:#1a1a2e!important;' : 'color:#999!important;') +
+        'font-size:13px;font-family:inherit;display:block;' +
+        'width:100%;box-sizing:border-box;min-height:26px;line-height:1.5;' +
+        'white-space:nowrap;overflow:visible;';
+      ci.replaceWith(div);
+    });
+
+    // 4. textarea → div 교체 (높이 자동 확장 + 줄바꿈 보존)
+    origTAs.forEach((ta, i) => {
+      const cta = cloneTAs[i];
+      if (!cta) return;
+      const div = document.createElement('div');
+      div.className = cta.className;
+      div.style.cssText =
+        'white-space:pre-wrap;word-break:break-word;border:1px solid #aaa;border-radius:4px;' +
+        'padding:6px 8px;background:#fff!important;color:#1a1a2e!important;' +
+        'font-size:13px;font-family:inherit;line-height:1.6;' +
+        'min-height:40px;width:100%;box-sizing:border-box;display:block;';
+      div.textContent = ta.value || '';
+      cta.replaceWith(div);
+    });
+
+    // 5. 화면 밖 배치 후 렌더
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;background:#fff;';
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    const rendered = await html2canvas(clone, {
+      scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, width: 800,
+    });
+    document.body.removeChild(wrapper);
+
+    const link = document.createElement('a');
+    link.download = _getReportFilename() + '.png';
+    link.href = rendered.toDataURL('image/png');
+    link.click();
+
+  } catch (e) {
+    console.error('PNG 저장 오류:', e);
+    alert('PNG 저장 실패: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📥 PNG 저장'; }
+  }
+}
+
+// ── DOCX 저장 (JSZip 기반 Open XML 직접 생성) ─────────────
+async function _downloadDocx() {
+  const btn = $('btn-sr-save-docx');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 생성 중…'; }
+
+  try {
+    // JSZip 지연 로딩
+    if (!window.JSZip) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('JSZip 로드 실패'));
+        document.head.appendChild(s);
+      });
+    }
+
+    const zip = new window.JSZip();
+    const val = id => $(id)?.value?.trim() || '';
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // canvas → base64 PNG 수집
+    const imgs = [];
+    function collectImg(canvas) {
+      if (!canvas || canvas.width === 0 || canvas.height === 0) return null;
+      const rId = `rId${imgs.length + 1}`;
+      imgs.push({ rId, b64: canvas.toDataURL('image/png').split(',')[1], width: canvas.width, height: canvas.height });
+      return rId;
+    }
+
+    const slitSecs = [];
+    for (const key of SLIT_KEYS) {
+      if (!slitStates[key].imgEl) continue;
+      slitSecs.push({
+        key,
+        imgRId:    collectImg($(`sr-img-${key}`)),
+        brightRId: collectImg($(`sr-bright-${key}`)),
+        dy:        $(`sr-dy-${key}`)?.textContent?.trim() || '--',
+        d:         val(`sr-d-${key}`),
+        lambda:    val(`sr-lambda-${key}`),
+      });
+    }
+
+    // px → EMU (96 dpi 기준)
+    const MAX_W = 480;
+    const p2e = px => Math.round(px * 9525);
+    function imgXml(rId, w, h) {
+      const dw = Math.min(w, MAX_W), dh = Math.round(h * dw / w);
+      const cx = p2e(dw), cy = p2e(dh), id = rId.replace('rId','');
+      return `<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${id}" name="img${id}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${id}" name="img${id}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+    }
+    function hd(lv, text) {
+      return `<w:p><w:pPr><w:pStyle w:val="Heading${lv}"/></w:pPr><w:r><w:t>${esc(text)}</w:t></w:r></w:p>`;
+    }
+    function para(text, bold = false) {
+      return `<w:p>${text.split('\n').map((line, i) =>
+        (i > 0 ? '<w:r><w:br/></w:r>' : '') +
+        `<w:r>${bold ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t xml:space="preserve">${esc(line)}</w:t></w:r>`
+      ).join('')}</w:p>`;
+    }
+    function cell(text, bold = false) {
+      return `<w:tc><w:p><w:r>${bold ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t>${esc(text)}</w:t></w:r></w:p></w:tc>`;
+    }
+    const blk = () => '<w:p/>';
+
+    const parts = [
+      hd(1, '이중슬릿 간섭무늬 실험 보고서'), blk(),
+      `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="888888"/><w:left w:val="single" w:sz="4" w:color="888888"/><w:bottom w:val="single" w:sz="4" w:color="888888"/><w:right w:val="single" w:sz="4" w:color="888888"/><w:insideH w:val="single" w:sz="4" w:color="888888"/><w:insideV w:val="single" w:sz="4" w:color="888888"/></w:tblBorders></w:tblPr><w:tr>${cell('이름',true)}${cell(val('sr-name'))}${cell('학번',true)}${cell(val('sr-number'))}${cell('반',true)}${cell(val('sr-class'))}${cell('날짜',true)}${cell(val('sr-date'))}</w:tr></w:tbl>`,
+      blk(),
+      para(`스크린까지의 거리 L = ${val('sr-L')} cm`, true), blk(),
+    ];
+
+    slitSecs.forEach(({ key, imgRId, brightRId, dy, d, lambda }) => {
+      const iI = imgs.find(x => x.rId === imgRId), bI = imgs.find(x => x.rId === brightRId);
+      parts.push(hd(2, `슬릿 ${key}`));
+      if (imgRId    && iI) parts.push(imgXml(imgRId,    iI.width, iI.height));
+      if (brightRId && bI) parts.push(imgXml(brightRId, bI.width, bI.height));
+      parts.push(para(`Δy${key} = ${dy}　　d${key} = ${d} mm　　λ${key} = ${lambda} nm`));
+      parts.push(blk());
+    });
+
+    parts.push(hd(2, '관찰'), para(val('sr-observation') || '(없음)'), blk(), hd(2, '고찰'));
+    [['sr-q1','Q1. 슬릿 간격이 변할 때 무늬 간격은 어떻게 변하는지 서술하시오.'],
+     ['sr-q2','Q2. 스크린까지의 거리 L이 늘어나면 무늬 간격은 어떻게 변할지 서술하시오.'],
+     ['sr-q3','Q3. 다른 색상의 빛을 사용했을 때 무늬 간격은 어떻게 변할지 서술하시오.']].forEach(([id, q]) => {
+      parts.push(para(q, true), para(val(id) || '(작성 안 됨)'), blk());
+    });
+
+    const imgRelsXml = imgs.map((img, i) =>
+      `<Relationship Id="${img.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/img${i+1}.png"/>`
+    ).join('');
+
+    zip.file('[Content_Types].xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`);
+
+    zip.file('_rels/.rels',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+
+    zip.file('word/document.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${parts.join('')}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr></w:body></w:document>`);
+
+    zip.file('word/_rels/document.xml.rels',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${imgRelsXml}<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/><Relationship Id="rIdSt" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+
+    zip.file('word/settings.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="720"/></w:settings>`);
+
+    zip.file('word/styles.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="240" w:after="120"/><w:jc w:val="center"/></w:pPr><w:rPr><w:b/><w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="160" w:after="80"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style></w:styles>`);
+
+    imgs.forEach((img, i) => zip.file(`word/media/img${i+1}.png`, img.b64, { base64: true }));
+
+    const blob = await zip.generateAsync({
+      type: 'blob',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = _getReportFilename() + '.docx';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+  } catch (e) {
+    console.error('DOCX 저장 오류:', e);
+    alert('DOCX 생성 실패: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📝 DOCX'; }
+  }
+}
+
+// ── 실험 저장/불러오기 ────────────────────────────────────
+
+function _expColRef() {
+  const user = auth.currentUser;
+  return user ? collection(db, 'sessions', user.uid, 'slit_experiments') : null;
+}
+
+function _getExperimentName() {
+  const name = $('sr-name')?.value?.trim() || '';
+  const num  = $('sr-number')?.value?.trim() || '';
+  const date = new Date().toLocaleDateString('ko-KR');
+  return [num, name, date].filter(Boolean).join(' ') || `실험 ${date}`;
+}
+
+async function _saveExperiment() {
+  const user = auth.currentUser;
+  if (!user) { alert('로그인이 필요합니다.'); return; }
+
+  const btn = $('btn-slit-save-exp');
+  const origText = btn?.textContent || '💾 저장';
+  if (btn) { btn.disabled = true; btn.textContent = '💾 저장 중…'; }
+
+  try {
+    // 임시 ID로 Storage 경로 결정
+    const expId = `exp_${Date.now()}`;
+    const imageUrls = {};
+
+    for (const key of SLIT_KEYS) {
+      const s = slitStates[key];
+      if (!s.imgEl) continue;
+
+      // 이미지 → blob (JPEG 압축)
+      const oc = new OffscreenCanvas(s.imgEl.naturalWidth, s.imgEl.naturalHeight);
+      oc.getContext('2d').drawImage(s.imgEl, 0, 0);
+      const blob = await oc.convertToBlob({ type: 'image/jpeg', quality: 0.80 });
+
+      const path = `reports/${user.uid}/slit/${expId}/${key}.jpg`;
+      const sRef = storageRef(storage, path);
+      await uploadBytes(sRef, blob);
+      imageUrls[key] = await getDownloadURL(sRef);
+    }
+
+    // 분석 상태 직렬화
+    const slitsData = {};
+    SLIT_KEYS.forEach(key => {
+      const s = slitStates[key];
+      if (!s.imgEl) return;
+      slitsData[key] = {
+        fringes: s.fringes.map(f => ({ xPx: f.xPx, label: f.label || '' })),
+        centerIdx: s.centerIdx,
+        scanY: s.scanY,
+        scanBandH: s.scanBandH,
+        sensitivity: s.sensitivity,
+        colorChannel: s.colorChannel,
+        autoEnhance: s.autoEnhance,
+        calibPoints: s.calib.points.map(p => ({ x: p.x, y: p.y })),
+        calibScale: s.calib.scale,
+        calibRealLengthCm: s.calib.realLengthCm,
+      };
+    });
+
+    // 보고서 필드
+    const reportData = {};
+    _REPORT_FIELDS.forEach(id => {
+      const el = $(id);
+      if (el) reportData[id.replace(/-/g, '_')] = el.value;
+    });
+
+    const colRef = _expColRef();
+    await addDoc(colRef, {
+      expId,
+      name: _getExperimentName(),
+      createdAt: Timestamp.now(),
+      imageUrls,
+      slits: slitsData,
+      reportData,
+    });
+
+    alert('✅ 실험이 저장되었습니다!');
+
+  } catch (e) {
+    console.error('실험 저장 실패:', e);
+    alert('저장 실패: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+  }
+}
+
+async function _listExperiments() {
+  const colRef = _expColRef();
+  if (!colRef) return [];
+  try {
+    const q = query(colRef, orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn('실험 목록 로드 실패:', e);
+    return [];
+  }
+}
+
+async function _loadExperiment(expDoc) {
+  const confirmLoad = confirm(`"${expDoc.name}" 실험을 불러오시겠습니까?\n현재 작업 중인 데이터는 초기화됩니다.`);
+  if (!confirmLoad) return;
+
+  const btn = document.querySelector(`[data-load-id="${expDoc.id}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+  const blobUrls = [];   // 나중에 revokeObjectURL할 목록
+
+  try {
+    SLIT_KEYS.forEach(k => { slitStates[k] = _mkState(k); });
+
+    for (const key of SLIT_KEYS) {
+      const slitData = expDoc.slits?.[key];
+      const imgUrl   = expDoc.imageUrls?.[key];
+      if (!slitData || !imgUrl) continue;
+
+      // fetch → blob URL 로 변환 (CORS / tainted-canvas 문제 해결)
+      let srcUrl = imgUrl;
+      try {
+        const res = await fetch(imgUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        srcUrl = URL.createObjectURL(blob);
+        blobUrls.push(srcUrl);
+      } catch (fetchErr) {
+        console.warn(`fetch 실패 (슬릿 ${key}), 직접 URL 사용:`, fetchErr);
+        // fetch 실패 시 원본 URL로 폴백
+      }
+
+      const img = await new Promise((resolve, reject) => {
+        const el = new Image();
+        el.onload  = () => resolve(el);
+        el.onerror = () => reject(new Error(`이미지 로드 실패 (슬릿 ${key})`));
+        el.src = srcUrl;
+      });
+
+      const s = slitStates[key];
+      s.imgEl = img;
+      s.originalImg = img;
+
+      s.fringes      = (slitData.fringes || []).map(f => ({ xPx: f.xPx, label: f.label || '' }));
+      s.centerIdx    = slitData.centerIdx ?? -1;
+      s.scanY        = slitData.scanY ?? 0;
+      s.scanBandH    = slitData.scanBandH ?? 20;
+      s.sensitivity  = slitData.sensitivity ?? 25;
+      s.colorChannel = slitData.colorChannel ?? 'lum';
+      s.autoEnhance  = slitData.autoEnhance ?? true;
+
+      if (slitData.calibPoints?.length === 2) {
+        s.calib.points = slitData.calibPoints.map(p => ({ x: p.x, y: p.y }));
+        if (slitData.calibScale) {
+          s.calib.scale = slitData.calibScale;
+          s.calib.realLengthCm = slitData.calibRealLengthCm;
+        }
+      }
+
+      const prev = $(`slit-preview-${key}`);
+      if (prev) { prev.src = srcUrl; prev.classList.remove('hidden'); }
+      const fname = $(`slit-filename-${key}`);
+      if (fname) fname.textContent = `✓ ${expDoc.name} (${key})`;
+      $(`slit-ucard-${key}`)?.classList.add('slit-ucard-loaded');
+      $(`slit-edit-upload-${key}`)?.classList.remove('hidden');
+    }
+
+    $('btn-slit-start').disabled = !SLIT_KEYS.some(k => slitStates[k].imgEl);
+
+    if (expDoc.reportData) {
+      _REPORT_FIELDS.forEach(id => {
+        const key = id.replace(/-/g, '_');
+        const el = $(id);
+        if (el && expDoc.reportData[key] !== undefined) el.value = expDoc.reportData[key];
+      });
+    }
+
+    alert(`✅ "${expDoc.name}" 실험을 불러왔습니다.`);
+
+  } catch (e) {
+    console.error('실험 불러오기 실패:', e);
+    // blob URL 정리
+    blobUrls.forEach(u => URL.revokeObjectURL(u));
+    alert('불러오기 실패: ' + (e?.message || String(e)));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '불러오기'; }
+  }
+}
+
+async function _deleteExperiment(expDoc) {
+  if (!confirm(`"${expDoc.name}" 실험을 삭제하시겠습니까?`)) return;
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+    // Storage 이미지 삭제 시도
+    for (const key of SLIT_KEYS) {
+      const imgUrl = expDoc.imageUrls?.[key];
+      if (!imgUrl) continue;
+      try {
+        const sRef = storageRef(storage, `reports/${user.uid}/slit/${expDoc.expId}/${key}.jpg`);
+        await deleteObject(sRef);
+      } catch (_) { /* 이미 없을 수 있음 */ }
+    }
+    // Firestore 문서 삭제
+    await deleteDoc(doc(db, 'sessions', user.uid, 'slit_experiments', expDoc.id));
+    await _refreshExperimentList();
+  } catch (e) {
+    alert('삭제 실패: ' + e.message);
+  }
+}
+
+async function _refreshExperimentList() {
+  const loading = $('slit-exp-loading');
+  const section = $('slit-saved-experiments');
+  const listEl  = $('slit-exp-list');
+  if (!listEl) return;
+
+  if (loading) loading.classList.remove('hidden');
+  if (section) section.classList.add('hidden');
+
+  const experiments = await _listExperiments();
+
+  if (loading) loading.classList.add('hidden');
+
+  if (experiments.length === 0) {
+    if (section) section.classList.add('hidden');
+    return;
+  }
+
+  listEl.innerHTML = '';
+  experiments.forEach(exp => {
+    const createdAt = exp.createdAt?.toDate?.()?.toLocaleString('ko-KR') || '';
+    const hasSlits = SLIT_KEYS.filter(k => exp.slits?.[k]).join(', ') || '-';
+    const row = document.createElement('div');
+    row.className = 'slit-exp-item';
+    row.innerHTML = `
+      <div class="slit-exp-info">
+        <span class="slit-exp-name">${exp.name}</span>
+        <span class="slit-exp-meta">${createdAt} &nbsp;·&nbsp; 슬릿 ${hasSlits}</span>
+      </div>
+      <div class="slit-exp-actions">
+        <button class="btn-ghost slit-exp-load-btn" data-load-id="${exp.id}" style="min-height:30px;font-size:12px;padding:0 10px;">불러오기</button>
+        <button class="btn-ghost slit-exp-del-btn" data-del-id="${exp.id}" style="min-height:30px;font-size:12px;padding:0 8px;color:#f47;border-color:#f47;">삭제</button>
+      </div>
+    `;
+    row.querySelector('.slit-exp-load-btn').addEventListener('click', () => _loadExperiment(exp));
+    row.querySelector('.slit-exp-del-btn').addEventListener('click', () => _deleteExperiment(exp));
+    listEl.appendChild(row);
+  });
+
+  if (section) section.classList.remove('hidden');
+}
+
 // ── 보고서 ───────────────────────────────────────────────
 function _bindReport() {
   $('btn-sr-back').addEventListener('click', () => _show('slit-analyze'));
   $('btn-sr-save').addEventListener('click', _printReport);
+  $('btn-sr-save-png')?.addEventListener('click', _downloadPng);
+  $('btn-sr-save-docx')?.addEventListener('click', _downloadDocx);
   $('sr-date').value = new Date().toISOString().slice(0,10);
+
+  // 보고서 필드 변경 시 자동 저장 (1초 디바운스)
+  let _saveTimer = null;
+  const _debouncedSave = () => {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(_saveReportData, 1000);
+  };
+  _REPORT_FIELDS.forEach(id => {
+    const el = $(id);
+    el?.addEventListener('input',  _debouncedSave);
+    el?.addEventListener('change', _debouncedSave);
+  });
 }
 
 // Δy(m=0 ↔ m=±1 평균) 계산
@@ -1564,44 +2142,85 @@ function _printReport() {
   const body = $('sr-body');
   if (!body) return;
 
-  // canvas → img 변환 후 clone (복사된 canvas는 내용이 비어있음)
-  const clone = body.cloneNode(true);
-  body.querySelectorAll('canvas').forEach((cv, i) => {
-    const img = document.createElement('img');
-    img.src       = cv.toDataURL('image/png');
-    img.className = cv.className;
-    img.style.cssText = cv.style.cssText;
-    clone.querySelectorAll('canvas')[i].replaceWith(img);
-  });
+  const btn = $('btn-sr-save');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 준비 중…'; }
 
-  // textarea rows를 실제 내용 높이에 맞게 조정
-  body.querySelectorAll('textarea').forEach((ta, i) => {
-    const cloneTa = clone.querySelectorAll('textarea')[i];
-    if (cloneTa) cloneTa.rows = Math.max(ta.rows, ta.value.split('\n').length);
-  });
+  // 파일명에 학번·이름 반영 (브라우저 PDF 저장 시 제목으로 사용)
+  const origTitle = document.title;
+  document.title = _getReportFilename();
 
-  // print container를 #app 외부에 생성
-  let container = document.getElementById('print-slit-report');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'print-slit-report';
-    container.style.cssText = 'display:none;';
-    document.body.appendChild(container);
-  }
-  container.innerHTML = '';
-  container.appendChild(clone);
+  try {
+    const clone = body.cloneNode(true);
 
-  document.body.classList.add('printing-slit-report');
-  window.print();
+    // canvas → img 변환 (cloneNode된 canvas는 내용이 비어있음)
+    const origCanvases  = Array.from(body.querySelectorAll('canvas'));
+    const cloneCanvases = Array.from(clone.querySelectorAll('canvas'));
+    origCanvases.forEach((cv, i) => {
+      const cloneCv = cloneCanvases[i];
+      if (!cloneCv) return;
+      const img = document.createElement('img');
+      try { img.src = cv.toDataURL('image/png'); } catch (_e) { /* 보안 제한 시 빈 이미지 */ }
+      img.className = cv.className;
+      img.style.cssText = cv.style.cssText;
+      cloneCv.replaceWith(img);
+    });
 
-  const cleanup = () => {
-    document.body.classList.remove('printing-slit-report');
+    // input 현재 값 복사 (cloneNode는 user-typed 값을 value 어트리뷰트에 반영하지 않음)
+    const origInputs  = Array.from(body.querySelectorAll('input'));
+    const cloneInputs = Array.from(clone.querySelectorAll('input'));
+    origInputs.forEach((el, i) => {
+      if (cloneInputs[i]) cloneInputs[i].setAttribute('value', el.value);
+    });
+
+    // textarea 내용 복사 (cloneNode는 textContent를 현재 value로 반영하지 않음)
+    const origTAs  = Array.from(body.querySelectorAll('textarea'));
+    const cloneTAs = Array.from(clone.querySelectorAll('textarea'));
+    origTAs.forEach((ta, i) => {
+      if (!cloneTAs[i]) return;
+      cloneTAs[i].textContent = ta.value;
+      cloneTAs[i].rows = Math.max(ta.rows, ta.value.split('\n').length + 1);
+    });
+
+    // print container를 #app 외부에 생성
+    let container = document.getElementById('print-slit-report');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'print-slit-report';
+      container.style.cssText = 'display:none;';
+      document.body.appendChild(container);
+    }
     container.innerHTML = '';
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup);
-  // afterprint가 발생하지 않는 환경 대비 fallback
-  setTimeout(cleanup, 3000);
+    container.appendChild(clone);
+
+    const restoreBtn = () => {
+      document.title = origTitle;
+      if (btn) { btn.disabled = false; btn.textContent = '🖨️ 인쇄'; }
+    };
+
+    document.body.classList.add('printing-slit-report');
+
+    // 브라우저가 DOM 변경사항을 렌더링한 뒤 인쇄 대화상자 열기
+    setTimeout(() => {
+      window.print();
+
+      const cleanup = () => {
+        document.body.classList.remove('printing-slit-report');
+        container.innerHTML = '';
+        window.removeEventListener('afterprint', cleanup);
+        restoreBtn();
+      };
+      window.addEventListener('afterprint', cleanup);
+      // afterprint가 발생하지 않는 환경 대비 fallback
+      setTimeout(cleanup, 5000);
+    }, 150);
+
+  } catch (e) {
+    console.error('보고서 인쇄 오류:', e);
+    document.title = origTitle;
+    document.body.classList.remove('printing-slit-report');
+    if (btn) { btn.disabled = false; btn.textContent = '🖨️ 인쇄'; }
+    alert('인쇄 준비 오류: ' + e.message);
+  }
 }
 
 // ── 이미지 편집기 ─────────────────────────────────────────

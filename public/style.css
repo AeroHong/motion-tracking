@@ -1574,6 +1574,47 @@ input[type="file"] {
   text-decoration-color: var(--accent);
 }
 
+/* ── 이중슬릿 저장된 실험 목록 ─────────────────────────── */
+.slit-exp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.slit-exp-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  flex-wrap: wrap;
+}
+.slit-exp-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.slit-exp-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.slit-exp-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.slit-exp-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 @media print {
   /* 기본: 앱 전체 숨김, print-container만 표시 */
   body > #app                  { display: none !important; }

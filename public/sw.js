@@ -1,6 +1,6 @@
 // sw.js — 서비스 워커 (PWA 홈 화면 설치용)
 // 버전 업데이트 시 CACHE 이름을 바꾸면 구 캐시가 자동 삭제됨
-const CACHE = 'motion-v19';
+const CACHE = 'motion-v27';
 const PRECACHE = ['/', '/index.html', '/style.css', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -46,7 +46,21 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // JS / CSS / 기타 정적 자산 — 캐시 우선, 없으면 네트워크
+  // JS 파일 — 네트워크 우선 (배포 즉시 최신 버전 반영), 실패 시 캐시 폴백
+  if (url.pathname.endsWith('.js')) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // CSS / 기타 정적 자산 — 캐시 우선, 없으면 네트워크
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
