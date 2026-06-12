@@ -436,8 +436,21 @@ function _fitCanvas() {
   brightCanvas.style.maxWidth = 'none';
 
   // 슬릿별 이미지 크기 기록 (LABEL_AREA_H 제외)
+  const prevW = st.canvasW || 0;
+  const prevH = st.canvasH || 0;
   st.canvasW = imgW;
   st.canvasH = imgH;
+
+  // 캔버스 크기가 바뀌면 저장된 좌표를 비례 보정
+  // (화면 크기 변화 또는 저장 후 다른 화면에서 불러올 때 모두 처리)
+  if (prevW > 0 && prevH > 0 && (prevW !== imgW || prevH !== imgH)) {
+    const sx = imgW / prevW;
+    const sy = imgH / prevH;
+    st.fringes.forEach(f => { f.xPx = f.xPx * sx; });
+    st.scanY = st.scanY * sy;
+    st.calib.points.forEach(p => { p.x *= sx; p.y *= sy; });
+    if (st.calib.isCalibrated) st.calib.setRealLength(st.calib.realLengthCm);
+  }
 
   if (!st.scanY) st.scanY = Math.round(imgH / 2);
   st._enhancedCanvas = null;   // 캔버스 크기 바뀌면 캐시 무효화
@@ -1784,6 +1797,8 @@ async function _saveExperiment() {
         calibPoints: s.calib.points.map(p => ({ x: p.x, y: p.y })),
         calibScale: s.calib.scale,
         calibRealLengthCm: s.calib.realLengthCm,
+        canvasW: s.canvasW || 0,
+        canvasH: s.canvasH || 0,
       };
     });
 
@@ -1885,6 +1900,9 @@ async function _loadExperiment(expDoc) {
       s.sensitivity  = slitData.sensitivity ?? 25;
       s.colorChannel = slitData.colorChannel ?? 'lum';
       s.autoEnhance  = slitData.autoEnhance ?? true;
+      // 저장 당시 캔버스 크기를 복원 → _fitCanvas에서 새 크기와 비교해 좌표 비례 보정
+      s.canvasW      = slitData.canvasW || 0;
+      s.canvasH      = slitData.canvasH || 0;
 
       if (slitData.calibPoints?.length === 2) {
         s.calib.points = slitData.calibPoints.map(p => ({ x: p.x, y: p.y }));
