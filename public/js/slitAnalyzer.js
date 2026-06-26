@@ -2010,7 +2010,11 @@ async function _refreshExperimentList() {
 
 // ── 보고서 ───────────────────────────────────────────────
 function _bindReport() {
-  $('btn-sr-back').addEventListener('click', () => _show('slit-analyze'));
+  $('btn-sr-back').addEventListener('click', () => {
+    _show('slit-analyze');
+    // 보고서 전환 중 레이아웃이 변경될 수 있으므로 섹션이 표시된 후 재렌더링
+    requestAnimationFrame(() => { if (st.imgEl) _switchSlit(activeKey); });
+  });
   $('btn-sr-save').addEventListener('click', _printReport);
   $('btn-sr-save-png')?.addEventListener('click', _downloadPng);
   $('btn-sr-save-docx')?.addEventListener('click', _downloadDocx);

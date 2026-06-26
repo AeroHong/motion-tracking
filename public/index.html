@@ -77,6 +77,13 @@
           <p class="mode-card-desc">사진 한 장으로<br>무늬 간격(Δy)을 측정</p>
           <button id="btn-card-slit" class="btn-primary mode-card-btn">선택하기</button>
         </div>
+        <div class="mode-card">
+          <span class="mode-card-badge">NEW</span>
+          <div class="mode-card-icon">💡</div>
+          <h3>회절무늬 분석<br>(머리카락 두께)</h3>
+          <p class="mode-card-desc">3회 측정으로<br>머리카락 두께 평균 계산</p>
+          <button id="btn-card-diff" class="btn-primary mode-card-btn">선택하기</button>
+        </div>
       </div>
 
       <!-- 촬영 체크리스트 -->
@@ -865,6 +872,310 @@
       </div>
 
     </div><!-- sr-body -->
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- ── 회절: 업로드 ───────────────────────────────────── -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="screen-diff-upload" class="hidden">
+    <div class="upload-card" style="max-width:700px;margin:0 auto;">
+      <button id="btn-diff-back" class="btn-ghost" style="margin-bottom:12px;align-self:flex-start;">← 모드 선택</button>
+      <h3>💡 회절무늬 분석 — 머리카락 두께</h3>
+      <p style="color:var(--text-dim);font-size:14px;margin:8px 0 16px;">
+        같은 머리카락을 스크린까지의 거리를 다르게 하여 3회 측정하세요.<br>
+        각 측정의 회절무늬 사진을 업로드하세요.
+      </p>
+
+      <!-- 저장된 실험 목록 -->
+      <div id="diff-saved-experiments" class="hidden" style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-weight:700;font-size:14px;">💾 저장된 실험</span>
+          <button id="btn-diff-exp-refresh" class="btn-ghost" style="min-height:30px;font-size:12px;padding:0 10px;">↻ 새로고침</button>
+        </div>
+        <div id="diff-exp-list" class="slit-exp-list"></div>
+      </div>
+      <div id="diff-exp-loading" class="hidden" style="text-align:center;color:var(--text-dim);font-size:13px;padding:8px 0 16px;">
+        ⏳ 저장된 실험 불러오는 중…
+      </div>
+
+      <div class="slit-upload-grid">
+        <!-- 측정 1 -->
+        <div class="slit-upload-card" id="diff-ucard-1">
+          <div class="slit-upload-label">측정 1</div>
+          <input type="file" id="diff-file-1" accept="image/*" style="display:none">
+          <div class="slit-btn-row">
+            <button class="btn-ghost diff-pick-btn">🖼️ 사진 선택</button>
+            <button class="btn-secondary diff-drive-btn">📂 드라이브</button>
+          </div>
+          <img id="diff-preview-1" class="slit-preview hidden" src="" alt="">
+          <span id="diff-filename-1" class="filename-label">선택 안 됨</span>
+        </div>
+        <!-- 측정 2 -->
+        <div class="slit-upload-card" id="diff-ucard-2">
+          <div class="slit-upload-label">측정 2</div>
+          <input type="file" id="diff-file-2" accept="image/*" style="display:none">
+          <div class="slit-btn-row">
+            <button class="btn-ghost diff-pick-btn">🖼️ 사진 선택</button>
+            <button class="btn-secondary diff-drive-btn">📂 드라이브</button>
+          </div>
+          <img id="diff-preview-2" class="slit-preview hidden" src="" alt="">
+          <span id="diff-filename-2" class="filename-label">선택 안 됨</span>
+        </div>
+        <!-- 측정 3 -->
+        <div class="slit-upload-card" id="diff-ucard-3">
+          <div class="slit-upload-label">측정 3</div>
+          <input type="file" id="diff-file-3" accept="image/*" style="display:none">
+          <div class="slit-btn-row">
+            <button class="btn-ghost diff-pick-btn">🖼️ 사진 선택</button>
+            <button class="btn-secondary diff-drive-btn">📂 드라이브</button>
+          </div>
+          <img id="diff-preview-3" class="slit-preview hidden" src="" alt="">
+          <span id="diff-filename-3" class="filename-label">선택 안 됨</span>
+        </div>
+      </div>
+      <button id="btn-diff-start" class="btn-primary" style="margin-top:20px;width:100%;" disabled>
+        분석 시작 →
+      </button>
+    </div>
+  </section>
+
+  <!-- ── 회절: 분석 화면 ────────────────────────────────── -->
+  <section id="screen-diff-analyze" class="hidden">
+
+    <!-- 상단 탭 + 툴바 -->
+    <div class="slit-tab-bar">
+      <button id="diff-tab-1" class="slit-tab active">측정 1</button>
+      <button id="diff-tab-2" class="slit-tab" disabled>측정 2</button>
+      <button id="diff-tab-3" class="slit-tab" disabled>측정 3</button>
+      <div style="flex:1"></div>
+      <button id="btn-diff-reupload"  class="btn-ghost"     style="min-height:36px;font-size:13px;padding:0 10px;">🖼️ 사진교체</button>
+      <button id="btn-diff-save-exp" class="btn-ghost"     style="min-height:36px;font-size:13px;padding:0 10px;">💾 저장</button>
+      <button id="btn-diff-report"   class="btn-secondary" style="min-height:36px;font-size:13px;padding:0 10px;">📄 보고서</button>
+      <button id="btn-diff-back2"    class="btn-ghost"     style="min-height:36px;font-size:13px;padding:0 10px;">← 모드</button>
+    </div>
+
+    <!-- 메인: 무늬목록(좌) + 이미지(중) + 컨트롤(우) -->
+    <div class="slit-main">
+
+      <!-- 좌: 무늬 목록 + 결과 -->
+      <div class="slit-fringe-panel">
+        <div class="slit-section-title">
+          무늬 목록 <span id="diff-fringe-count" class="slit-count-chip"></span>
+        </div>
+        <div id="diff-fringe-list" class="slit-fringe-list"></div>
+        <button id="diff-btn-clear" class="sidebar-btn btn-ghost" style="font-size:11px;min-height:28px;margin-top:2px;">전체 삭제</button>
+        <div class="sidebar-divider"></div>
+        <div class="slit-section-title">📐 결과 (d)</div>
+        <div id="diff-results" class="slit-results"></div>
+      </div>
+
+      <!-- 중: 밝기 그래프 + 이미지 캔버스 -->
+      <div class="slit-left">
+        <div class="slit-bright-wrap">
+          <canvas id="diff-bright-canvas"></canvas>
+        </div>
+        <div class="slit-image-wrap" id="diff-canvas-wrap">
+          <canvas id="diff-canvas" style="touch-action:none;display:block;"></canvas>
+        </div>
+        <div id="diff-nudge-bar" class="slit-nudge-bar hidden">
+          <span id="diff-nudge-fringe-label" class="nudge-label"></span>
+          <button id="diff-nudge-ll"  class="nudge-btn">◀◀</button>
+          <button id="diff-nudge-l"   class="nudge-btn">◀</button>
+          <button id="diff-nudge-r"   class="nudge-btn">▶</button>
+          <button id="diff-nudge-rr"  class="nudge-btn">▶▶</button>
+          <button id="diff-nudge-del" class="nudge-btn nudge-del-btn">✕ 삭제</button>
+        </div>
+        <div id="diff-mode-hint" style="font-size:12px;color:var(--text-dim);text-align:center;padding:2px 0;min-height:18px;"></div>
+      </div>
+
+      <!-- 우: 모드 버튼 + 설정 -->
+      <div class="slit-sidebar">
+        <button id="diff-btn-pan"         class="sidebar-btn active">🖐 이동</button>
+        <button id="diff-btn-add"         class="sidebar-btn">➕ 무늬 추가</button>
+        <button id="diff-btn-drag"        class="sidebar-btn">↔ 무늬 이동</button>
+        <button id="diff-btn-setcenter"   class="sidebar-btn">⭕ 중앙 지정</button>
+        <button id="diff-btn-calibration" class="sidebar-btn">📏 기준 보정</button>
+
+        <div id="diff-calib-panel" class="slit-calib-panel hidden">
+          <div class="slit-calib-label">두 점 사이 실제 길이 (cm)</div>
+          <div class="slit-calib-row">
+            <input type="number" id="diff-calib-value" min="0.1" step="0.1" placeholder="예: 5.0">
+            <button id="diff-calib-ok" class="btn-primary" style="min-height:32px;padding:0 10px;font-size:13px;">✓</button>
+          </div>
+        </div>
+
+        <div class="sidebar-divider"></div>
+        <div class="slit-section-title">📏 스크린 거리 L</div>
+        <div class="slit-calib-row" style="margin-top:4px;">
+          <input type="number" id="diff-L-input" min="0" step="0.1" placeholder="L (cm)" style="flex:1;min-width:0;">
+          <span style="font-size:12px;color:var(--text-dim);white-space:nowrap;">cm</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:3px;">이 측정의 스크린까지 거리</div>
+
+        <div class="sidebar-divider"></div>
+        <div class="slit-section-title">💡 파장 λ</div>
+        <div class="slit-calib-row" style="margin-top:4px;">
+          <input type="number" id="diff-lambda" min="300" max="800" step="1" value="650" style="flex:1;min-width:0;">
+          <span style="font-size:12px;color:var(--text-dim);white-space:nowrap;">nm</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+        <div class="slit-section-title">🎨 색상 채널</div>
+        <div class="slit-ch-btns">
+          <button class="diff-ch-btn active" data-ch="lum">전체</button>
+          <button class="diff-ch-btn" data-ch="R">🔴 R</button>
+          <button class="diff-ch-btn" data-ch="G">🟢 G</button>
+        </div>
+        <button id="btn-diff-enhance" class="sidebar-btn btn-secondary" style="margin-top:4px;">✨ 자동 보정 ON</button>
+
+        <div class="sidebar-divider"></div>
+        <div class="slit-section-title">📡 자동 감지</div>
+        <div class="slit-slider-row">
+          <label>감도</label>
+          <input type="range" id="diff-sensitivity" min="5" max="120" value="25">
+          <span id="diff-sensitivity-val">25</span>
+        </div>
+        <div class="slit-slider-row">
+          <label>띠 높이</label>
+          <input type="range" id="diff-bandh" min="3" max="100" value="20">
+          <span id="diff-bandh-val">20</span>
+        </div>
+        <button id="diff-btn-detect" class="sidebar-btn btn-primary">🔍 자동 감지</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 회절: 보고서 ───────────────────────────────────── -->
+  <section id="screen-diff-report" class="hidden">
+    <div class="sr-toolbar">
+      <button id="btn-dr-back" class="btn-ghost" style="min-height:38px;padding:0 16px;font-size:14px;">← 분석으로</button>
+      <span style="font-weight:700;font-size:15px;">📄 회절 실험 보고서</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <button id="btn-dr-save-png" class="btn-primary" style="min-height:38px;padding:0 14px;font-size:13px;">📥 PNG 저장</button>
+      </div>
+    </div>
+
+    <div style="overflow-y:auto;flex:1;padding:16px;">
+    <div id="dr-body" class="sr-body">
+
+      <!-- 학생 정보 -->
+      <div class="sr-section sr-header-section">
+        <h2 style="text-align:center;margin-bottom:14px;font-size:18px;">회절 실험 보고서 — 머리카락 두께 측정</h2>
+        <div class="sr-info-grid">
+          <label>이름<input id="dr-name" placeholder="홍길동"></label>
+          <label>학번<input id="dr-number" placeholder="10101" maxlength="5" inputmode="numeric"></label>
+          <label>반<input id="dr-class" placeholder="1" maxlength="2"></label>
+          <label>날짜<input id="dr-date" type="date"></label>
+        </div>
+      </div>
+
+      <!-- 실험 조건 -->
+      <div class="sr-section">
+        <h3>실험 조건</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px;">
+          <label style="display:flex;flex-direction:column;gap:4px;">
+            빛의 파장 λ
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input id="dr-lambda" type="number" min="300" max="800" step="1" value="650"
+                style="width:100%;padding:4px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;color:var(--text);">
+              <span style="white-space:nowrap;font-size:12px;">nm</span>
+            </div>
+          </label>
+          <div style="font-size:13px;color:var(--text-dim);display:flex;align-items:center;">
+            <div>수식: d = λ · L / y₁<br>d: 머리카락 두께(μm)<br>y₁: 중앙→1차 어두운 무늬 거리(cm)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 측정 결과 요약 -->
+      <div class="sr-section">
+        <h3>측정 결과 요약</h3>
+        <table class="slit-table" style="width:100%;">
+          <thead>
+            <tr><th>측정</th><th>스크린 거리 L (cm)</th><th>y₁ 평균 (cm)</th><th>머리카락 두께 d (μm)</th></tr>
+          </thead>
+          <tbody id="dr-summary-table">
+            <tr><td>1</td><td><input id="dr-L-1" type="number" step="0.1" min="0" placeholder="cm" class="sr-inline-input"></td><td id="dr-y1-1">--</td><td id="dr-d-1">--</td></tr>
+            <tr><td>2</td><td><input id="dr-L-2" type="number" step="0.1" min="0" placeholder="cm" class="sr-inline-input"></td><td id="dr-y1-2">--</td><td id="dr-d-2">--</td></tr>
+            <tr><td>3</td><td><input id="dr-L-3" type="number" step="0.1" min="0" placeholder="cm" class="sr-inline-input"></td><td id="dr-y1-3">--</td><td id="dr-d-3">--</td></tr>
+          </tbody>
+        </table>
+        <div class="slit-avg-box" style="margin-top:12px;font-size:16px;">
+          <span>머리카락 두께 평균 <em>d̄</em></span>
+          <strong id="dr-d-avg">--</strong>
+          <span id="dr-d-std" style="font-size:13px;font-weight:400;color:var(--text-dim);"></span>
+        </div>
+      </div>
+
+      <!-- 측정별 상세 -->
+      <div id="dr-block-1" class="sr-section sr-slit-block">
+        <h3>측정 1</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="sr-img-label">회절무늬 (스캔 영역)</div>
+            <canvas id="dr-img-1" class="sr-canvas"></canvas>
+          </div>
+          <div>
+            <div class="sr-img-label">밝기 그래프</div>
+            <canvas id="dr-bright-1" class="sr-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div id="dr-block-2" class="sr-section sr-slit-block hidden">
+        <h3>측정 2</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="sr-img-label">회절무늬 (스캔 영역)</div>
+            <canvas id="dr-img-2" class="sr-canvas"></canvas>
+          </div>
+          <div>
+            <div class="sr-img-label">밝기 그래프</div>
+            <canvas id="dr-bright-2" class="sr-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div id="dr-block-3" class="sr-section sr-slit-block hidden">
+        <h3>측정 3</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <div class="sr-img-label">회절무늬 (스캔 영역)</div>
+            <canvas id="dr-img-3" class="sr-canvas"></canvas>
+          </div>
+          <div>
+            <div class="sr-img-label">밝기 그래프</div>
+            <canvas id="dr-bright-3" class="sr-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- 관찰 -->
+      <div class="sr-section">
+        <h3>관찰</h3>
+        <textarea id="dr-observation" class="sr-textarea" rows="3"
+          placeholder="실험에서 관찰한 내용을 기록하세요.&#10;(예: 거리가 멀수록 y₁이 커졌다. 3회 측정값이 근사하게 나왔다.)"></textarea>
+      </div>
+
+      <!-- 고찰 -->
+      <div class="sr-section">
+        <h3>고찰</h3>
+        <div class="sr-q-block">
+          <div class="sr-q-label">Q1. 3회 측정에서 d값이 거의 일정하게 나왔는지, 그 이유를 서술하시오.</div>
+          <textarea id="dr-q1" class="sr-textarea" rows="3" placeholder="서술하세요..."></textarea>
+        </div>
+        <div class="sr-q-block">
+          <div class="sr-q-label">Q2. 스크린까지의 거리 L을 변화시켰을 때 y₁은 어떻게 변했는지 서술하시오.</div>
+          <textarea id="dr-q2" class="sr-textarea" rows="3" placeholder="서술하세요..."></textarea>
+        </div>
+        <div class="sr-q-block">
+          <div class="sr-q-label">Q3. 실험에서 발생할 수 있는 오차 원인을 2가지 서술하시오.</div>
+          <textarea id="dr-q3" class="sr-textarea" rows="3" placeholder="서술하세요..."></textarea>
+        </div>
+      </div>
+
+    </div><!-- dr-body -->
     </div>
   </section>
 
