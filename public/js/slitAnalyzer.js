@@ -4,6 +4,42 @@ import { Calibration }      from './calibration.js';
 import { ZoomController }   from './zoomController.js';
 import { pickImageFromDrive } from './drivePicker.js';
 import { auth, db, storage } from './auth.js';
+
+// ── 외부(회절 분석 등)에서 공용 편집기를 사용하기 위한 인터페이스 ──
+let _editorExternalCallback = null;
+
+export function openEditorForExternal(img, editParams, onApply) {
+  _editorExternalCallback = onApply;
+  if (!editorCanvas) { console.error('편집기가 초기화되지 않았습니다.'); return; }
+  editorKey = null;
+  edSt.originalImg = img;
+  const ep = editParams || {};
+  edSt.angle      = ep.angle      ?? 0;
+  edSt.brightness = ep.brightness ?? 0;
+  edSt.contrast   = ep.contrast   ?? 0;
+  edSt.cropFrac   = ep.cropFrac   ? { ...ep.cropFrac } : null;
+  edSt.cropMode   = false;
+  edSt.cropDragging = false;
+  $('editor-slit-label').textContent = '사진';
+  $('editor-angle').value      = edSt.angle;
+  $('editor-brightness').value = edSt.brightness;
+  $('editor-contrast').value   = edSt.contrast;
+  $('editor-angle-val').textContent      = `${edSt.angle.toFixed(1)}°`;
+  $('editor-brightness-val').textContent = edSt.brightness;
+  $('editor-contrast-val').textContent   = edSt.contrast;
+  edSt.zoom = 1; edSt.panX = 0; edSt.panY = 0;
+  edSt.showGrid = false; edSt.panDragging = false;
+  $('btn-editor-crop-toggle').textContent = '드래그로 영역 선택';
+  $('btn-editor-crop-toggle').classList.remove('btn-secondary');
+  $('btn-editor-crop-clear').classList.toggle('hidden', !edSt.cropFrac);
+  $('editor-crop-hint').classList.add('hidden');
+  $('btn-editor-grid').textContent = '📐 격자 표시';
+  $('btn-editor-grid').classList.remove('btn-secondary');
+  editorCanvas.style.cursor = 'grab';
+  _updateEditorZoomUI();
+  $('slit-editor-modal').classList.remove('hidden');
+  requestAnimationFrame(() => { _fitEditorCanvas(); _renderEditor(); });
+}
 import { doc, getDoc, setDoc, Timestamp, collection, addDoc, getDocs, deleteDoc, query, orderBy }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
@@ -51,8 +87,9 @@ let activeKey = 'A';
 let st = slitStates.A;   // 활성 슬릿 상태 참조
 
 let canvas, ctx, brightCanvas, zoom, _show;
-let _currentExpDocId = null;   // 현재 세션의 저장된 실험 문서 ID (덮어쓰기용)
-let _currentExpId    = null;   // 현재 세션의 expId (Storage 경로용)
+let _currentExpDocId   = null;  // 현재 세션의 저장된 실험 문서 ID (덮어쓰기용)
+let _currentExpId      = null;  // 현재 세션의 expId (Storage 경로용)
+let _currentExpCreatedAt = null; // 업데이트 시 createdAt 보존용
 
 // 밝기 그래프 가로 줌/패닝 뷰포트 (0..1 범위)
 const brightVP = { scale: 1, offset: 0, dragX: null, dragOff: 0 };
@@ -279,7 +316,7 @@ function _bindAnalyzeUI() {
   });
 
   $('btn-slit-back2').addEventListener('click', () => _show('mode'));
-  $('btn-slit-reupload').addEventListener('click', () => _show('slit-upload'));
+  $('btn-slit-reupload').addEventListener('click', () => { _show('slit-upload'); _refreshExperimentList(); });
   $('btn-slit-edit-img').addEventListener('click', () => { if (st.imgEl) _openEditor(activeKey); });
   $('btn-slit-save-exp')?.addEventListener('click', _saveExperiment);
   $('btn-slit-report').addEventListener('click', () => {
@@ -1818,14 +1855,14 @@ async function _saveExperiment() {
     };
 
     if (_currentExpDocId) {
-      // 기존 문서 덮어쓰기
+      payload.createdAt = _currentExpCreatedAt || Timestamp.now();
       await setDoc(doc(db, 'sessions', user.uid, 'slit_experiments', _currentExpDocId), payload, { merge: false });
     } else {
-      // 최초 저장 — 새 문서 생성
       payload.createdAt = Timestamp.now();
       const docRef = await addDoc(_expColRef(), payload);
-      _currentExpDocId = docRef.id;
-      _currentExpId    = expId;
+      _currentExpDocId   = docRef.id;
+      _currentExpId      = expId;
+      _currentExpCreatedAt = payload.createdAt;
     }
 
     alert('✅ 실험이 저장되었습니다!');
@@ -1930,9 +1967,9 @@ async function _loadExperiment(expDoc) {
       });
     }
 
-    // 불러온 실험을 현재 세션으로 설정 → 재저장 시 같은 문서 덮어쓰기
-    _currentExpDocId = expDoc.id;
-    _currentExpId    = expDoc.expId;
+    _currentExpDocId     = expDoc.id;
+    _currentExpId        = expDoc.expId;
+    _currentExpCreatedAt = expDoc.createdAt || null;
 
     alert(`✅ "${expDoc.name}" 실험을 불러왔습니다.`);
 
@@ -2429,6 +2466,7 @@ function _openEditor(key) {
 function _closeEditor() {
   $('slit-editor-modal').classList.add('hidden');
   editorKey = null;
+  _editorExternalCallback = null;
 }
 
 function _resetEditor() {
@@ -2785,16 +2823,20 @@ async function _applyEdits() {
     await new Promise((resolve, reject) => {
       const newImg = new Image();
       newImg.onload = () => {
-        const s = slitStates[editorKey];
-        s.imgEl = newImg;
-        s.editParams = { angle, brightness: b, contrast: c, cropFrac: crop ? { ...crop } : null };
-        _resetAnalysis(s);
-
-        const prev = $(`slit-preview-${editorKey}`);
-        if (prev) { prev.src = url; prev.classList.remove('hidden'); }
-
-        if (!$('screen-slit-analyze').classList.contains('hidden') && activeKey === editorKey) {
-          _switchSlit(editorKey);
+        const editParams = { angle, brightness: b, contrast: c, cropFrac: crop ? { ...crop } : null };
+        if (_editorExternalCallback) {
+          _editorExternalCallback(newImg, editParams, url);
+          _editorExternalCallback = null;
+        } else {
+          const s = slitStates[editorKey];
+          s.imgEl = newImg;
+          s.editParams = editParams;
+          _resetAnalysis(s);
+          const prev = $(`slit-preview-${editorKey}`);
+          if (prev) { prev.src = url; prev.classList.remove('hidden'); }
+          if (!$('screen-slit-analyze').classList.contains('hidden') && activeKey === editorKey) {
+            _switchSlit(editorKey);
+          }
         }
         resolve();
       };

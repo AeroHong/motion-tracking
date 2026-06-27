@@ -1,10 +1,11 @@
 // diffractionAnalyzer.js — 단일슬릿/머리카락 회절 무늬 분석 (측정 3회)
 // 수식: d = λ·L / y₁  (y₁ = 중앙 밝은 무늬 중심 ~ 1차 어두운 무늬 거리)
 
-import { Calibration }        from './calibration.js';
-import { ZoomController }     from './zoomController.js';
-import { pickImageFromDrive } from './drivePicker.js';
-import { auth, db, storage }  from './auth.js';
+import { Calibration }           from './calibration.js';
+import { ZoomController }        from './zoomController.js';
+import { pickImageFromDrive }    from './drivePicker.js';
+import { auth, db, storage }     from './auth.js';
+import { openEditorForExternal } from './slitAnalyzer.js';
 import { doc, getDoc, setDoc, Timestamp, collection, addDoc, getDocs, deleteDoc, query, orderBy }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
@@ -56,8 +57,9 @@ let activeKey = '1';
 let st = runStates['1'];
 
 let canvas, ctx, brightCanvas, zoom, _show;
-let _currentExpDocId = null;
-let _currentExpId    = null;
+let _currentExpDocId     = null;
+let _currentExpId        = null;
+let _currentExpCreatedAt = null;
 
 const brightVP = { scale: 1, offset: 0, dragX: null, dragOff: 0 };
 let hoverX = null;
@@ -270,11 +272,28 @@ function _bindAnalyzeUI() {
   });
 
   $('btn-diff-back2').addEventListener('click',    () => _show('mode'));
-  $('btn-diff-reupload').addEventListener('click', () => _show('diff-upload'));
+  $('btn-diff-reupload').addEventListener('click', () => { _show('diff-upload'); _refreshExperimentList(); });
   $('btn-diff-save-exp')?.addEventListener('click', _saveExperiment);
   $('btn-diff-report').addEventListener('click', () => {
     _show('diff-report');
-    requestAnimationFrame(() => { _buildReport(); _loadReportData(); });
+    requestAnimationFrame(async () => {
+      await _loadReportData();
+      const diffLEl = $('diff-lambda'), drLEl = $('dr-lambda');
+      if (diffLEl && drLEl && !drLEl.value) drLEl.value = diffLEl.value;
+      _buildReport();
+    });
+  });
+
+  $('btn-diff-edit-img')?.addEventListener('click', () => {
+    if (!st.imgEl) return;
+    openEditorForExternal(st.originalImg || st.imgEl, st.editParams, (newImg, editParams, url) => {
+      st.imgEl = newImg;
+      st.editParams = editParams;
+      _resetAnalysis(st);
+      const prev = $(`diff-preview-${activeKey}`);
+      if (prev) { prev.src = url; prev.classList.remove('hidden'); }
+      if (!$('screen-diff-analyze').classList.contains('hidden')) _switchRun(activeKey);
+    });
   });
 
   $('diff-btn-pan').addEventListener('click',         () => _setMode('pan'));
@@ -1237,13 +1256,11 @@ function _calcY1(sData) {
   const c = sData.fringes[sData.centerIdx];
   const left  = sData.centerIdx > 0                       ? sData.fringes[sData.centerIdx-1] : null;
   const right = sData.centerIdx < sData.fringes.length-1  ? sData.fringes[sData.centerIdx+1] : null;
-  const vals = [];
-  if (left  && sData.calib.isCalibrated) vals.push(sData.calib.toCm(c.xPx - left.xPx));
-  else if (left) vals.push(c.xPx - left.xPx);
-  if (right && sData.calib.isCalibrated) vals.push(sData.calib.toCm(right.xPx - c.xPx));
-  else if (right) vals.push(right.xPx - c.xPx);
+  const leftVal  = left  ? (sData.calib.isCalibrated ? sData.calib.toCm(c.xPx - left.xPx)  : c.xPx - left.xPx)  : null;
+  const rightVal = right ? (sData.calib.isCalibrated ? sData.calib.toCm(right.xPx - c.xPx) : right.xPx - c.xPx) : null;
+  const vals = [leftVal, rightVal].filter(v => v !== null);
   if (vals.length === 0) return null;
-  return { avg: vals.reduce((a,b)=>a+b,0)/vals.length, left: vals[0]??null, right: vals[1]??null };
+  return { avg: vals.reduce((a,b)=>a+b,0)/vals.length, left: leftVal, right: rightVal };
 }
 
 function _calcD(sData, lambdaNm) {
@@ -1479,7 +1496,7 @@ function _drawBrightnessGraphTo(targetCanvas, targetW, sData) {
   oc.width = bw;
   oc.height = Math.round(sData.imgEl.naturalHeight * bw / sData.imgEl.naturalWidth);
   oc.getContext('2d').drawImage(sData.imgEl, 0, 0, bw, oc.height);
-  const natH2 = sData.imgEl.naturalHeight || oc.height;
+  const natH2 = sData.canvasH || sData.imgEl.naturalHeight || oc.height;
   const scanY = Math.max(0, Math.min(oc.height-1, Math.round(sData.scanY * oc.height / natH2)));
   const bandH2 = Math.max(1, Math.round((sData.scanBandH||20) * oc.height / natH2));
   const sy1 = Math.max(0, scanY-bandH2), sy2 = Math.min(oc.height-1, scanY+bandH2);
@@ -1527,15 +1544,24 @@ async function _downloadPng() {
     const origTAs       = Array.from(body.querySelectorAll('textarea'));
     const cloneTAs      = Array.from(clone.querySelectorAll('textarea'));
 
+    let hasTaintedCanvas = false;
     origCanvases.forEach((cv, i) => {
       const cloneCv = cloneCanvases[i];
       if (!cloneCv) return;
       const img = document.createElement('img');
-      try { img.src = cv.toDataURL('image/png'); } catch (_) {}
+      try {
+        img.src = cv.toDataURL('image/png');
+      } catch (e) {
+        hasTaintedCanvas = true;
+        img.style.cssText += ';background:#eee;min-height:40px;';
+      }
       img.className = cv.className;
-      img.style.cssText = cv.style.cssText + ';display:block;max-width:100%;';
+      img.style.cssText = (img.style.cssText || '') + cv.style.cssText + ';display:block;max-width:100%;';
       cloneCv.replaceWith(img);
     });
+    if (hasTaintedCanvas) {
+      alert('⚠️ 저장된 실험에서 불러온 이미지를 PNG에 포함할 수 없습니다.\n\nFirebase Storage 규칙에 diff/ 경로를 추가하거나,\n사진을 직접 업로드한 뒤 다시 시도하세요.');
+    }
 
     clone.style.cssText = 'background:#fff;color:#1a1a2e;padding:20px;max-width:none;width:800px;' +
       '--bg:#fff;--bg-surface:#f4f6fa;--bg-card:#f4f6fa;--text:#1a1a2e;--text-dim:#555;--border:#ccc;';
@@ -1649,12 +1675,14 @@ async function _saveExperiment() {
     };
 
     if (_currentExpDocId) {
+      payload.createdAt = _currentExpCreatedAt || Timestamp.now();
       await setDoc(doc(db,'sessions',user.uid,'diff_experiments',_currentExpDocId), payload, { merge:false });
     } else {
       payload.createdAt = Timestamp.now();
       const docRef = await addDoc(_expColRef(), payload);
-      _currentExpDocId = docRef.id;
-      _currentExpId    = expId;
+      _currentExpDocId     = docRef.id;
+      _currentExpId        = expId;
+      _currentExpCreatedAt = payload.createdAt;
     }
     alert('✅ 실험이 저장되었습니다!');
     _refreshExperimentList();
@@ -1697,6 +1725,7 @@ async function _loadExperiment(expDoc) {
       } catch { srcUrl = imgUrl; }
       const img = await new Promise((resolve, reject) => {
         const el = new Image();
+        el.crossOrigin = 'anonymous';
         el.onload  = () => resolve(el);
         el.onerror = () => reject(new Error(`이미지 로드 실패 (측정 ${key})`));
         el.src = srcUrl;
@@ -1722,7 +1751,8 @@ async function _loadExperiment(expDoc) {
       }
       const prev = $(`diff-preview-${key}`);
       if (prev) { prev.src=srcUrl; prev.classList.remove('hidden'); }
-      $(`diff-filename-${key}`)?.setAttribute('textContent', `✓ ${expDoc.name} (${key})`);
+      const fnEl = $(`diff-filename-${key}`);
+      if (fnEl) fnEl.textContent = `✓ ${expDoc.name} (${key})`;
       $(`diff-ucard-${key}`)?.classList.add('slit-ucard-loaded');
     }
 
@@ -1734,8 +1764,9 @@ async function _loadExperiment(expDoc) {
       });
     }
     $('btn-diff-start').disabled = !RUN_KEYS.some(k => runStates[k].imgEl);
-    _currentExpDocId = expDoc.id;
-    _currentExpId    = expDoc.expId;
+    _currentExpDocId     = expDoc.id;
+    _currentExpId        = expDoc.expId;
+    _currentExpCreatedAt = expDoc.createdAt || null;
     alert(`✅ "${expDoc.name}" 실험을 불러왔습니다.`);
   } catch (e) {
     blobUrls.forEach(u => URL.revokeObjectURL(u));
