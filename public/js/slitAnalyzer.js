@@ -40,7 +40,7 @@ export function openEditorForExternal(img, editParams, onApply) {
   $('slit-editor-modal').classList.remove('hidden');
   requestAnimationFrame(() => { _fitEditorCanvas(); _renderEditor(); });
 }
-import { doc, getDoc, setDoc, Timestamp, collection, addDoc, getDocs, deleteDoc, query, orderBy }
+import { doc, getDoc, setDoc, Timestamp, collection, addDoc, getDocs, deleteDoc }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
@@ -1880,9 +1880,15 @@ async function _listExperiments() {
   const colRef = _expColRef();
   if (!colRef) return [];
   try {
-    const q = query(colRef, orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await getDocs(colRef);
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // createdAt 없는 문서도 포함되도록 클라이언트 정렬
+    docs.sort((a, b) => {
+      const ta = a.createdAt?.toMillis?.() ?? 0;
+      const tb = b.createdAt?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    return docs;
   } catch (e) {
     console.warn('실험 목록 로드 실패:', e);
     return [];

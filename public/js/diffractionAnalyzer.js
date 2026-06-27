@@ -6,7 +6,7 @@ import { ZoomController }        from './zoomController.js';
 import { pickImageFromDrive }    from './drivePicker.js';
 import { auth, db, storage }     from './auth.js';
 import { openEditorForExternal } from './slitAnalyzer.js';
-import { doc, getDoc, setDoc, Timestamp, collection, addDoc, getDocs, deleteDoc, query, orderBy }
+import { doc, getDoc, setDoc, Timestamp, collection, addDoc, getDocs, deleteDoc }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
@@ -64,6 +64,8 @@ let _currentExpCreatedAt = null;
 const brightVP = { scale: 1, offset: 0, dragX: null, dragOff: 0 };
 let hoverX = null;
 let pendingFringeX = null;
+
+export function refreshDiffExperiments() { _refreshExperimentList(); }
 
 export function initDiffractionAnalyzer(showScreen) {
   _show        = showScreen;
@@ -1698,9 +1700,15 @@ async function _listExperiments() {
   const colRef = _expColRef();
   if (!colRef) return [];
   try {
-    const q = query(colRef, orderBy('createdAt','desc'));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    const snap = await getDocs(colRef);
+    const docs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    // createdAt 없는 문서도 포함되도록 클라이언트 정렬
+    docs.sort((a, b) => {
+      const ta = a.createdAt?.toMillis?.() ?? 0;
+      const tb = b.createdAt?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    return docs;
   } catch { return []; }
 }
 

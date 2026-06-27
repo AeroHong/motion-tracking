@@ -67,7 +67,7 @@ import { ZoomController }  from './zoomController.js';
 import { makeDraggable }   from './utils.js';
 import { initFreeMotion }    from './freeMotion.js';
 import { initSlitAnalyzer, refreshSlitExperiments }  from './slitAnalyzer.js';
-import { initDiffractionAnalyzer }                    from './diffractionAnalyzer.js';
+import { initDiffractionAnalyzer, refreshDiffExperiments } from './diffractionAnalyzer.js';
 import { VideoController }    from './video.js';
 import { Calibration }        from './calibration.js';
 import { Tracker }            from './tracker.js';
@@ -238,7 +238,7 @@ $('checklist-modal').addEventListener('click', e => {
 $('btn-card-classic').addEventListener('click', () => { showScreen('upload'); checkPrevReport(); });
 $('btn-card-free').addEventListener('click',    () => showScreen('free-upload'));
 $('btn-card-slit').addEventListener('click',    () => { showScreen('slit-upload'); refreshSlitExperiments(); });
-$('btn-card-diff').addEventListener('click',    () => showScreen('diff-upload'));
+$('btn-card-diff').addEventListener('click',    () => { showScreen('diff-upload'); refreshDiffExperiments(); });
 $('btn-back-mode').addEventListener('click',    () => showScreen('mode'));
 
 // freeMotion 모듈 초기화
