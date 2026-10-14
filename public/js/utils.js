@@ -98,8 +98,13 @@ export function fitProjectile(data) {
   const ts = data.map(d => d.relTSec);
   const xf = linearFit(ts, data.map(d => d.relXCm));
   const yf = quadFit(ts, data.map(d => d.relYCm));
+  // 첫 점(t=0)에서의 초기 속력·발사 각도 — y는 아래가 +이므로 위쪽 성분은 -vy0
+  const vx  = xf ? xf.b : null, vy0 = yf ? yf.c1 : null;
+  const ok  = vx != null && vy0 != null;
   return {
     n:    data.length,
+    v0:       ok ? Math.hypot(vx, vy0) : null,
+    angleDeg: ok ? Math.atan2(-vy0, Math.abs(vx)) * 180 / Math.PI : null,
     vx:   xf ? xf.b  : null,
     x0:   xf ? xf.a  : null,
     vxR2: xf ? xf.r2 : null,

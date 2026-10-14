@@ -566,64 +566,75 @@
 
   <!-- ── 자유 물체 운동: 결과 ───────────────────── -->
   <section id="screen-free-result" class="hidden">
-    <div class="result-section">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <h3 id="fm-result-title" style="margin:0;">자유 물체 운동 분석</h3>
-        <input type="text" id="fm-result-name-edit"
-          style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:4px 10px;width:220px;"
-          placeholder="운동 이름 수정">
-        <button id="fm-btn-apply-name" class="btn-ghost" style="font-size:13px;padding:0 12px;min-height:32px;">적용</button>
+    <!-- 상단 바: 돌아가기 · 제목 · 이름 수정 · 보정/원점 정보 -->
+    <div class="fmr-top">
+      <button id="fm-btn-back-track" class="btn-ghost fmr-back">← 트래킹</button>
+      <h3 id="fm-result-title" class="fmr-title">자유 물체 운동 분석</h3>
+      <div class="fmr-rename">
+        <input type="text" id="fm-result-name-edit" placeholder="운동 이름 수정">
+        <button id="fm-btn-apply-name" class="btn-ghost">적용</button>
       </div>
-      <div id="fm-result-origin-info" class="hidden" style="margin-top:8px;font-size:13px;color:#ffd700;">
-        📌 원점 설정됨 — <span id="fm-result-origin-coords"></span>
-      </div>
-      <div id="fm-result-calib-info" style="margin-top:6px;font-size:13px;color:var(--text-dim);"></div>
-    </div>
-    <div class="result-section">
-      <div class="chart-row">
-        <div class="chart-box"><canvas id="fm-chart-xt"></canvas></div>
-        <div class="chart-box"><canvas id="fm-chart-yt"></canvas></div>
-        <div class="chart-box"><canvas id="fm-chart-xy"></canvas></div>
-      </div>
-    </div>
-    <!-- 회귀 분석 결과 -->
-    <div class="result-section">
-      <h3>회귀 분석</h3>
-      <div id="fm-fit-info" class="fm-fit-info"></div>
-    </div>
-    <!-- 측정 데이터 표 -->
-    <div class="result-section">
-      <h3>측정 데이터</h3>
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-        <button id="fm-btn-copy-table" class="btn-secondary" style="min-height:38px;font-size:13px;padding:0 16px;">📋 클립보드 복사 (Google Sheets)</button>
-        <span id="fm-copy-status" style="font-size:13px;color:#2e7d32;"></span>
-      </div>
-      <div id="fm-data-table-wrap" style="overflow-x:auto;"></div>
-    </div>
-
-    <div class="result-section">
-      <h3>☁ 클라우드 저장</h3>
-      <p id="fm-cloud-save-status" style="font-size:14px;color:var(--text-dim);">보고서를 저장하면 나중에 다시 다운로드할 수 있습니다.</p>
-    </div>
-    <div class="result-section">
-      <h3>보고서 다운로드</h3>
-      <div class="report-form">
-        <label>이름 <input type="text" id="fm-student-name" placeholder="홍길동"></label>
-        <label>학번 <input type="text" id="fm-student-class" placeholder="10101" maxlength="5" inputmode="numeric"></label>
-      </div>
-      <button id="fm-btn-report" class="btn-primary">📄 보고서 저장 (PNG)</button>
-    </div>
-    <!-- 과제 제출 (과제 연결 상태에서만 표시) -->
-    <div id="fm-bridge-section" class="result-section hidden">
-      <h3>📤 과제에 결과 제출</h3>
-      <p id="fm-bridge-status" style="font-size:14px;color:var(--text-dim);">분석이 끝나면 아래 버튼으로 결과를 과제에 제출하세요. 다시 제출하면 최신 결과로 바뀝니다.</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-        <button id="fm-btn-bridge-submit" class="btn-primary">📤 과제에 결과 제출</button>
-        <button id="fm-btn-bridge-return" class="btn-secondary hidden">✍ 보고서 작성으로 돌아가기</button>
+      <div class="fmr-meta">
+        <span id="fm-result-calib-info"></span>
+        <span id="fm-result-origin-info" class="hidden">📌 원점 — <span id="fm-result-origin-coords"></span></span>
       </div>
     </div>
 
-    <button id="fm-btn-back-track" class="btn-ghost">← 트래킹으로 돌아가기</button>
+    <div class="fmr-grid">
+      <!-- 왼쪽: 그래프 + 데이터 -->
+      <div class="fmr-main">
+        <div class="fmr-charts">
+          <div class="result-section fmr-chart"><canvas id="fm-chart-xt"></canvas></div>
+          <div class="result-section fmr-chart"><canvas id="fm-chart-yt"></canvas></div>
+        </div>
+        <div class="fmr-lower">
+          <div class="result-section fmr-chart"><canvas id="fm-chart-xy"></canvas></div>
+          <div class="result-section fmr-table">
+            <div class="fmr-sec-head">
+              <h3>측정 데이터</h3>
+              <button id="fm-btn-copy-table" class="btn-secondary fmr-small-btn">📋 복사 (Sheets)</button>
+              <span id="fm-copy-status" class="fmr-copy-status"></span>
+            </div>
+            <div id="fm-data-table-wrap" class="fmr-table-wrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 오른쪽: 회귀 분석 · 학생 정보 · 제출/저장 -->
+      <aside class="fmr-side">
+        <div class="result-section">
+          <h3>회귀 분석</h3>
+          <div id="fm-fit-info" class="fm-fit-info"></div>
+        </div>
+
+        <div class="result-section">
+          <h3>학생 정보</h3>
+          <div class="fmr-student">
+            <label>학번 <input type="text" id="fm-student-class" placeholder="10101" maxlength="5" inputmode="numeric"></label>
+            <label>이름 <input type="text" id="fm-student-name" placeholder="홍길동"></label>
+          </div>
+        </div>
+
+        <!-- 과제 제출 (과제 연결 상태에서만 표시) -->
+        <div id="fm-bridge-section" class="result-section fmr-submit hidden">
+          <h3>📤 과제에 결과 제출</h3>
+          <p id="fm-bridge-status" class="fmr-note">분석이 끝나면 아래 버튼으로 결과를 과제에 제출하세요. 다시 제출하면 최신 결과로 바뀝니다.</p>
+          <div class="fmr-actions">
+            <button id="fm-btn-bridge-submit" class="btn-primary">📤 과제에 결과 제출</button>
+            <button id="fm-btn-bridge-return" class="btn-secondary hidden">✍ 보고서 작성으로 돌아가기</button>
+          </div>
+        </div>
+
+        <div class="result-section">
+          <h3>저장</h3>
+          <div class="fmr-actions">
+            <button id="fm-btn-cloud-save" class="btn-secondary">☁ 클라우드 저장</button>
+            <button id="fm-btn-report" class="btn-ghost">📄 PNG 다운로드</button>
+          </div>
+          <p id="fm-cloud-save-status" class="fmr-note">클라우드에 저장하면 나중에 다시 볼 수 있습니다.</p>
+        </div>
+      </aside>
+    </div>
   </section>
 
   <!-- ── 이중슬릿: 업로드 ──────────────────────────── -->

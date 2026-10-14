@@ -2,6 +2,7 @@
 
 import { VideoController }           from './video.js';
 import { ZoomController }            from './zoomController.js';
+import { Loupe }                     from './loupe.js';
 import { Calibration }               from './calibration.js';
 import { Tracker }                   from './tracker.js';
 import { AutoTracker }               from './autotracker.js';
@@ -39,7 +40,7 @@ const st = {
   panStart:       null,
 };
 
-let vc, calib, tracker, autoTracker, graphs, fmZoom;
+let vc, calib, tracker, autoTracker, graphs, fmZoom, loupe;
 
 // 작업 자동 저장 (fmSession.js) — 영상 출처 + 보정·원점·점만 저장, 영상 자체는 저장하지 않음
 let _videoSource   = null;  // {type:'drive', fileId, name} | {type:'local', name, size}
@@ -62,6 +63,7 @@ export function initFreeMotion(showScreen) {
     $('fm-fps-status').textContent = auto ? `자동 감지: ${fpsStr}fps` : `기본값: ${fpsStr}fps`;
     _slider();
   });
+  loupe = new Loupe($('fm-canvas'), $('fm-video'));
   _bindUpload();
   _bindTrack();
 }
@@ -111,8 +113,10 @@ function _bindUpload() {
     vc.setFps(fps);
     _slider();
   });
-  $('fm-btn-start').addEventListener('click', () => {
+  $('fm-btn-start').addEventListener('click', async () => {
     _show('free-track');
+    if (vc.currentFrame < _minFrame()) await vc.seekToFrame(_minFrame());
+    _slider(); _redraw();
     requestAnimationFrame(() => requestAnimationFrame(_fit));
     _syncFps();
   });
@@ -273,7 +277,7 @@ async function _applySession(s) {
   _calibStatus();
   _show('free-track');
   _slider();
-  await vc.seekToFrame(Math.min(s.frame || 0, Math.max(0, vc.totalFrames - 1)));
+  await vc.seekToFrame(Math.max(_minFrame(), Math.min(s.frame || 0, vc.totalFrames - 1)));
   $('fm-frame-slider').value = vc.currentFrame;
   _setMode('pan');
   _redraw(); _frameInfo();
@@ -359,6 +363,8 @@ function _bindTrack() {
   cvs.addEventListener('mousemove',  _move);
   cvs.addEventListener('mouseup',    _up);
   cvs.addEventListener('mouseleave', () => {
+    loupe.hide();
+    st.calibDragIdx = -1;
     st.potentialDrag = null;
     if (st.panStart) { st.panStart = null; cvs.style.cursor = 'grab'; }
     if (st.dragPoint) { st.dragPoint = null; cvs.style.cursor = 'grab'; }
@@ -373,6 +379,7 @@ function _bindTrack() {
       if (!btn) return;
       if (scale <= 1) { btn.classList.add('hidden'); }
       else { span.textContent = `${scale.toFixed(1)}×`; btn.classList.remove('hidden'); }
+      _redraw();   // 점·글자 크기를 확대 배율에 맞춰 다시 그린다
     },
   });
   $('fm-btn-zoom-reset').addEventListener('click', () => fmZoom.reset());
@@ -383,6 +390,7 @@ function _bindTrack() {
     $('fm-result-title').textContent = name;
     $('fm-result-name-edit').value   = name;
     _updateResultInfo();
+    $('fm-btn-report').classList.toggle('hidden', Boolean(getBridge()));  // 과제 연결 시엔 제출로 대신
     _show('free-result');
     _renderGraphs();
   });
@@ -399,28 +407,37 @@ function _bindTrack() {
   $('fm-btn-report').addEventListener('click', async () => {
     const btn = $('fm-btn-report');
     btn.disabled = true; btn.textContent = '생성 중...';
-    const statusEl = $('fm-cloud-save-status');
     try {
-      const r = _reportInputs();
-      const { studentName, className, motionLabel, data, fit } = r;
-      const pngBlob = await generateFreeMotionReport(r);
-
-      if (statusEl) { statusEl.textContent = '☁ 저장 중...'; statusEl.style.color = 'var(--text-dim)'; }
-      try {
-        await saveFreeMotionReportToCloud({
-          studentName, className, motionLabel, data, calibration: calib, pngBlob,
-          fit, origin: st.origin, fps: parseFloat($('fm-track-fps').value) || null,
-        });
-        if (statusEl) { statusEl.textContent = '✅ 저장 완료 — 목록에 추가됨'; statusEl.style.color = '#2e7d32'; }
-        _checkFreeReport();
-      } catch (cloudErr) {
-        console.warn('클라우드 저장 실패:', cloudErr);
-        if (statusEl) { statusEl.textContent = '⚠ 클라우드 저장 실패 (로컬 다운로드는 완료됨)'; statusEl.style.color = '#e65100'; }
-      }
+      await generateFreeMotionReport(_reportInputs());
     } catch (e) {
       alert('보고서 생성 실패: ' + e.message);
     } finally {
-      btn.disabled = false; btn.textContent = '📄 보고서 저장 (PNG)';
+      btn.disabled = false; btn.textContent = '📄 PNG 다운로드';
+    }
+  });
+
+  $('fm-btn-cloud-save').addEventListener('click', async () => {
+    const btn      = $('fm-btn-cloud-save');
+    const statusEl = $('fm-cloud-save-status');
+    btn.disabled = true; btn.textContent = '저장 중...';
+    statusEl.textContent = '☁ 저장 중...'; statusEl.style.color = 'var(--text-dim)';
+    try {
+      const r = _reportInputs();
+      const { studentName, className, motionLabel, data, fit } = r;
+      const pngBlob = await renderFreeMotionReportBlob(r);
+      await saveFreeMotionReportToCloud({
+        studentName, className, motionLabel, data, calibration: calib, pngBlob,
+        fit, origin: st.origin, fps: parseFloat($('fm-track-fps').value) || null,
+      });
+      statusEl.textContent = '✅ 저장 완료 — 업로드 화면의 "저장된 보고서"에서 볼 수 있습니다';
+      statusEl.style.color = '#2e7d32';
+      _checkFreeReport();
+    } catch (e) {
+      console.warn('클라우드 저장 실패:', e);
+      statusEl.textContent = '⚠ 클라우드 저장 실패: ' + (e.message || e.code);
+      statusEl.style.color = '#e65100';
+    } finally {
+      btn.disabled = false; btn.textContent = '☁ 클라우드 저장';
     }
   });
 
@@ -515,10 +532,33 @@ function _pt(e) {
   };
 }
 
+// 캔버스 px / 화면 px — 점·글자·탭 판정 크기를 화면 기준으로 맞춘다 (확대 배율 포함)
+function _k() {
+  const cvs = $('fm-canvas');
+  const r   = cvs.getBoundingClientRect();
+  return r.width ? cvs.width / r.width : 1;
+}
+
+function _showLoupe(e, x, y, color) {
+  loupe.show(x, y, e.clientX, e.clientY, { color });
+}
+
 function _down(e) {
   const { x, y } = _pt(e);
+  const k = _k();
 
-  if (st.mode === 'pan') {
+  // 패닝·이동 모드: 점을 누르면 그 점을 옮기고, 빈 곳을 누르면 화면을 패닝한다
+  if (st.mode === 'pan' || st.mode === null) {
+    const ci = calib.findPointNear(x, y, 22 * k);
+    if (ci !== -1) {
+      st.calibDragIdx = ci;
+      _showLoupe(e, calib.points[ci].x, calib.points[ci].y, '#00e5ff');
+      return;
+    }
+    if (calib.isOnButton(x, y)) { _setMode('calibration'); _showCalibBar(); _redraw(); return; }
+    const ti = tracker.findPointNear(x, y, 18 * k);
+    if (ti !== -1) { st.potentialDrag = { index: ti, startX: x, startY: y }; return; }
+    if (st.mode === null && st.selectedIdx !== -1) { st.selectedIdx = -1; _redraw(); }
     st.panStart = { clientX: e.clientX, clientY: e.clientY };
     $('fm-canvas').style.cursor = 'grabbing';
     return;
@@ -541,13 +581,6 @@ function _down(e) {
     _setMode('pan'); _redraw(); return;
   }
 
-  if (st.mode === null) {
-    const idx = tracker.findPointNear(x, y);
-    if (idx !== -1) st.potentialDrag = { index: idx, startX: x, startY: y };
-    else { st.selectedIdx = -1; _redraw(); }
-    return;
-  }
-
   if (st.mode === 'auto-box') {
     st.dragState = { startX: x, startY: y, endX: x, endY: y, active: true }; return;
   }
@@ -557,11 +590,16 @@ function _down(e) {
       _showCalibBar();
       return;
     }
-    const nearIdx = calib.findPointNear(x, y);
+    const nearIdx = calib.findPointNear(x, y, 22 * k);
     if (nearIdx !== -1) {
       st.calibDragIdx = nearIdx;
     } else if (calib.points.length < 2) {
       calib.addPoint(x, y);
+      st.calibDragIdx = calib.points.length - 1;   // 누른 채로 끌어 위치를 다듬을 수 있게
+    }
+    if (st.calibDragIdx !== -1) {
+      const p = calib.points[st.calibDragIdx];
+      _showLoupe(e, p.x, p.y, '#00e5ff');
     }
     _redraw(); return;
   }
@@ -598,8 +636,9 @@ function _move(e) {
     return;
   }
 
-  if (st.calibDragIdx !== -1 && st.mode === 'calibration') {
+  if (st.calibDragIdx !== -1) {
     calib.movePoint(st.calibDragIdx, x, y);
+    _showLoupe(e, x, y, '#00e5ff');
     _updateCalibBarDist();
     if (calib.realLengthCm) {
       calib.setRealLength(calib.realLengthCm);
@@ -611,17 +650,22 @@ function _move(e) {
 
   if (st.potentialDrag) {
     const dx = x - st.potentialDrag.startX, dy = y - st.potentialDrag.startY;
-    if (Math.sqrt(dx*dx + dy*dy) > 5) {
+    if (Math.sqrt(dx*dx + dy*dy) > 5 * _k()) {
       st.dragPoint = { index: st.potentialDrag.index };
       st.potentialDrag = null;
       cvs.style.cursor = 'grabbing';
     }
   }
-  if (st.dragPoint) { tracker.updatePoint(st.dragPoint.index, x, y); _redraw(); return; }
+  if (st.dragPoint) {
+    tracker.updatePoint(st.dragPoint.index, x, y);
+    _showLoupe(e, x, y, '#ff5722');
+    _redraw(); return;
+  }
   if (st.dragState?.active) { st.dragState.endX = x; st.dragState.endY = y; _redraw(); _drawBox(cvs); }
 }
 
 function _up(e) {
+  loupe.hide();
   if (st.panStart) {
     st.panStart = null;
     $('fm-canvas').style.cursor = 'grab';
@@ -629,6 +673,7 @@ function _up(e) {
   }
   if (st.calibDragIdx !== -1) {
     st.calibDragIdx = -1;
+    _redraw();
     return;
   }
   if (st.potentialDrag) {
@@ -755,7 +800,7 @@ function _redraw() {
   const ctx = cvs.getContext('2d');
   ctx.clearRect(0, 0, cvs.width, cvs.height);
   vc.drawCurrentFrame();
-  calib.draw(ctx);
+  calib.drawDimension(ctx, _k());
   _drawOrigin(ctx, cvs);
   _drawPoints(ctx, cvs);
   if (st.dragState) _drawBox(cvs);
@@ -766,25 +811,25 @@ function _redraw() {
 function _drawOrigin(ctx, cvs) {
   if (!st.origin) return;
   const { xPx: ox, yPx: oy } = st.origin;
-  const W = cvs.width, H = cvs.height;
+  const W = cvs.width, H = cvs.height, k = _k();
   ctx.save();
   // 좌표축 점선
-  ctx.strokeStyle = 'rgba(255,215,0,0.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([8, 5]);
+  ctx.strokeStyle = 'rgba(255,215,0,0.55)'; ctx.lineWidth = 1.5 * k; ctx.setLineDash([8 * k, 5 * k]);
   ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke();
   ctx.setLineDash([]);
   // 원점 원
-  ctx.beginPath(); ctx.arc(ox, oy, 9, 0, Math.PI * 2);
+  ctx.beginPath(); ctx.arc(ox, oy, 7 * k, 0, Math.PI * 2);
   ctx.fillStyle = '#ffd700'; ctx.fill();
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = '#000'; ctx.font = 'bold 11px sans-serif';
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * k; ctx.stroke();
+  ctx.fillStyle = '#000'; ctx.font = `bold ${9 * k}px sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('O', ox, oy);
   // 축 레이블
-  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px sans-serif';
+  ctx.fillStyle = '#ffd700'; ctx.font = `bold ${12 * k}px sans-serif`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  if (W - ox > 50) ctx.fillText('+x →', ox + 14, oy - 6);
-  if (H - oy > 24) ctx.fillText('+y ↓', ox + 6, H - 8);
+  if (W - ox > 50 * k) ctx.fillText('+x →', ox + 12 * k, oy - 6 * k);
+  if (H - oy > 24 * k) ctx.fillText('+y ↓', ox + 6 * k, H - 8 * k);
   ctx.restore();
 }
 
@@ -794,10 +839,11 @@ const NUMS = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩',
 function _drawPoints(ctx, cvs) {
   const pts = tracker.points;
   if (pts.length === 0) return;
+  const k = _k();
   ctx.save();
   // 가이드 선 (h + v, 각 점)
   pts.forEach(p => {
-    ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1 * k; ctx.setLineDash([4 * k, 4 * k]);
     ctx.strokeStyle = 'rgba(100,210,255,0.5)';
     ctx.beginPath(); ctx.moveTo(0, p.yPx); ctx.lineTo(cvs.width, p.yPx); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(p.xPx, 0); ctx.lineTo(p.xPx, cvs.height); ctx.stroke();
@@ -807,7 +853,7 @@ function _drawPoints(ctx, cvs) {
   for (let i = 1; i < pts.length; i++) {
     const pp = pts[i - 1], p = pts[i];
     ctx.beginPath(); ctx.moveTo(pp.xPx, pp.yPx); ctx.lineTo(p.xPx, p.yPx);
-    ctx.strokeStyle = 'rgba(255,255,0,0.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,0,0.55)'; ctx.lineWidth = 1.5 * k; ctx.stroke();
   }
   // 점 + 번호 + 좌표
   pts.forEach((p, i) => {
@@ -816,36 +862,36 @@ function _drawPoints(ctx, cvs) {
 
     // 원점 선택 모드 호버 하이라이트
     if (hovOrg) {
-      ctx.beginPath(); ctx.arc(p.xPx, p.yPx, 18, 0, Math.PI * 2);
-      ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3; ctx.setLineDash([5, 3]);
+      ctx.beginPath(); ctx.arc(p.xPx, p.yPx, 13 * k, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2.5 * k; ctx.setLineDash([5 * k, 3 * k]);
       ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillStyle = '#ffd700'; ctx.font = `bold ${12 * k}px sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillText('원점으로 설정', p.xPx, p.yPx - 20);
+      ctx.fillText('원점으로 설정', p.xPx, p.yPx - 15 * k);
     }
 
-    ctx.beginPath(); ctx.arc(p.xPx, p.yPx, sel ? 10 : 7, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(p.xPx, p.yPx, (sel ? 7 : 5) * k, 0, Math.PI * 2);
     ctx.fillStyle   = hovOrg ? 'rgba(255,215,0,0.9)' :
                       p.lowConf ? 'rgba(255,152,0,0.85)' : 'rgba(255,87,34,0.85)';
     ctx.fill();
     ctx.strokeStyle = hovOrg ? '#fff' : sel ? '#ffeb3b' : '#fff';
-    ctx.lineWidth   = sel ? 3 : 1.5; ctx.stroke();
+    ctx.lineWidth   = (sel ? 2.5 : 1.2) * k; ctx.stroke();
 
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#fff'; ctx.font = `bold ${11 * k}px sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(NUMS[i] ?? `${i + 1}`, p.xPx + 11, p.yPx - 7);
+    ctx.fillText(NUMS[i] ?? `${i + 1}`, p.xPx + 8 * k, p.yPx - 6 * k);
 
     // 원점 기준 좌표 표시
     if (st.origin) {
       const xR = calib.toUnit(p.xPx - st.origin.xPx).toFixed(1);
       const yR = calib.toUnit(p.yPx - st.origin.yPx).toFixed(1);
-      ctx.fillStyle = '#ffe082'; ctx.font = '10px sans-serif';
-      ctx.fillText(`(${xR}, ${yR}) ${calib.unit}`, p.xPx + 11, p.yPx + 8);
+      ctx.fillStyle = '#ffe082'; ctx.font = `${10 * k}px sans-serif`;
+      ctx.fillText(`(${xR}, ${yR}) ${calib.unit}`, p.xPx + 8 * k, p.yPx + 9 * k);
     }
     if (sel) {
-      ctx.fillStyle = '#ffeb3b'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillStyle = '#ffeb3b'; ctx.font = `bold ${13 * k}px sans-serif`;
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText('✕', p.xPx - 20, p.yPx - 7);
+      ctx.fillText('✕', p.xPx - 18 * k, p.yPx - 6 * k);
     }
   });
   ctx.restore();
@@ -986,6 +1032,10 @@ export function fitSummaryLines(fit, unit) {
   if (unit === 'cm' && fit.ay != null) {
     lines.push(`→ 가속도 ${f(fit.ay / 100, 2)} m/s²  (중력가속도 9.8 m/s²와 비교: 오차 ${f(Math.abs(fit.ay / 100 - 9.8) / 9.8 * 100, 1)}%)`);
   }
+  if (fit.v0 != null) {
+    const v0m = unit === 'cm' ? `  (${f(fit.v0 / 100, 2)} m/s)` : '';
+    lines.push(`초기 속력 v₀ = ${f(fit.v0, 1)} ${unit}/s${v0m},  발사 각도 θ = ${f(fit.angleDeg, 1)}°  (수평 기준, 위쪽 +)`);
+  }
   return lines;
 }
 
@@ -1089,12 +1139,18 @@ async function _loadVideo(file, source = null) {
   $('fm-origin-bar').classList.add('hidden');
   fmZoom?.reset();
   await vc.load(file);
+  if (_minFrame() > 0) await vc.seekToFrame(_minFrame());
   _slider();
   $('fm-btn-start').disabled = false;
 }
+// 프레임 0은 대부분 아직 디코딩되지 않은 검은 화면이라 1부터 쓴다
+function _minFrame() { return vc.totalFrames > 1 ? 1 : 0; }
+
 function _slider() {
-  $('fm-frame-slider').max   = Math.max(0, vc.totalFrames - 1);
-  $('fm-frame-slider').value = 0;
+  const min = _minFrame();
+  $('fm-frame-slider').min   = min;
+  $('fm-frame-slider').max   = Math.max(min, vc.totalFrames - 1);
+  $('fm-frame-slider').value = Math.max(min, vc.currentFrame || 0);
   _frameInfo();
 }
 function _frameInfo() {
@@ -1111,7 +1167,7 @@ function _syncFps() {
   _interval();
 }
 async function _step(d) {
-  const next = Math.max(0, Math.min(vc.currentFrame + d, vc.totalFrames - 1));
+  const next = Math.max(_minFrame(), Math.min(vc.currentFrame + d, vc.totalFrames - 1));
   await vc.seekToFrame(next);
   $('fm-frame-slider').value = vc.currentFrame;
   _redraw(); _frameInfo();

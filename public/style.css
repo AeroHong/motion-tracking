@@ -2146,3 +2146,64 @@ body.lock-viewport #app { height: 100vh; height: 100dvh; min-height: 0; overflow
   .fmu-card { padding: 18px 16px; }
   .fmu-pick { grid-template-columns: 1fr; }
 }
+
+/* ── 자유 물체 운동: 결과 화면 (fmr-) — 좌우 배치로 스크롤 최소화 ── */
+#screen-free-result { padding: 14px 16px 20px; gap: 12px; }
+#screen-free-result .result-section { padding: 12px 14px; }
+#screen-free-result .result-section h3 { margin-bottom: 8px; font-size: 15px; }
+.fmr-top { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.fmr-back { min-height: 40px; padding: 0 14px; font-size: 14px; }
+.fmr-title { font-size: 18px; color: var(--text); margin: 0; }
+.fmr-rename { display: flex; gap: 6px; }
+.fmr-rename input {
+  width: 190px; min-height: 36px; padding: 0 10px; font-size: 13px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+}
+.fmr-rename button { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.fmr-meta { display: flex; gap: 4px 14px; flex-wrap: wrap; font-size: 13px; color: var(--text-dim); margin-left: auto; }
+#fm-result-origin-info { color: #b8860b; }
+
+.fmr-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 12px; align-items: start; }
+.fmr-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.fmr-side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; min-width: 0; }
+.fmr-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fmr-lower  { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.fmr-chart { height: 260px; position: relative; padding: 8px !important; min-width: 0; }
+
+.fmr-sec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.fmr-sec-head h3 { margin: 0 !important; }
+.fmr-small-btn { min-height: 32px; padding: 0 10px; font-size: 12px; }
+.fmr-copy-status { font-size: 12px; color: #2e7d32; }
+.fmr-table { min-width: 0; }
+.fmr-table-wrap { overflow: auto; max-height: 360px; }
+/* 셀 폭은 값 길이에 맞춘다 */
+.fmr-table-wrap .data-table { width: auto; font-size: 13px; }
+.fmr-table-wrap .data-table th, .fmr-table-wrap .data-table td { padding: 4px 8px; }
+.fmr-table-wrap .data-table thead th { position: sticky; top: 0; }
+
+.fmr-student { display: grid; grid-template-columns: 110px 1fr; gap: 8px; }
+.fmr-student label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); }
+.fmr-student input {
+  min-height: 42px; padding: 0 10px; font-size: 15px; width: 100%;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+}
+.fmr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.fmr-actions button { flex: 1 1 140px; min-height: 48px; font-size: 15px; }
+.fmr-note { font-size: 13px; color: var(--text-dim); margin: 8px 0 0; }
+.fmr-submit { border: 2px solid var(--primary); }
+#screen-free-result .fm-fit-info { font-size: 14px; gap: 4px; }
+
+@media (max-width: 1023px) {
+  .fmr-grid { grid-template-columns: 1fr; }
+  .fmr-side { position: static; order: -1; }   /* 좁은 화면: 회귀·제출을 그래프보다 위로 */
+  .fmr-meta { margin-left: 0; }
+}
+@media (max-width: 640px) {
+  .fmr-charts, .fmr-lower { grid-template-columns: 1fr; }
+}
+
+/* ── 조준경 확대 (loupe.js) ── */
+.loupe-canvas {
+  position: fixed; z-index: 1000; pointer-events: none;
+  border-radius: 50%; box-shadow: 0 4px 18px rgba(0,0,0,0.6);
+}
