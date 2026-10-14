@@ -16,6 +16,10 @@
   <link rel="stylesheet" href="style.css">
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- 결과 화면 카드 이동·크기 조정 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-extra.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
   <!-- html2canvas (보고서 PNG 저장) -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <!-- heic2any (HEIC → JPEG 변환) -->
@@ -52,7 +56,7 @@
     </div>
     <div class="ebb-actions">
       <button id="ebb-btn-login" class="btn-primary hidden">🔗 과제 계정 연결</button>
-      <button id="ebb-btn-return" class="btn-ghost hidden">← 보고서 작성으로</button>
+      <button id="ebb-btn-return" class="btn-essay hidden">📝 보고서 작성하기 ↗</button>
     </div>
   </div>
 
@@ -496,6 +500,7 @@
       <!-- 캔버스 (자동 패널은 캔버스 위 오버레이) -->
       <div class="canvas-wrapper" id="fm-canvas-wrapper">
         <canvas id="fm-canvas"></canvas>
+        <canvas id="fm-overlay" class="fm-overlay"></canvas>
 
         <!-- 자동 추적 패널 — 캔버스 위 반투명 오버레이 -->
         <div id="fm-auto-panel" class="hidden auto-panel">
@@ -574,24 +579,87 @@
         <input type="text" id="fm-result-name-edit" placeholder="운동 이름 수정">
         <button id="fm-btn-apply-name" class="btn-ghost">적용</button>
       </div>
+      <button id="fm-btn-reset-layout" class="btn-ghost fmr-reset" title="카드 배치를 처음 상태로">⟲ 배치 초기화</button>
       <div class="fmr-meta">
         <span id="fm-result-calib-info"></span>
         <span id="fm-result-origin-info" class="hidden">📌 원점 — <span id="fm-result-origin-coords"></span></span>
       </div>
     </div>
 
-    <div class="fmr-grid">
-      <!-- 왼쪽: 그래프 + 데이터 -->
-      <div class="fmr-main">
-        <div class="fmr-charts">
-          <div class="result-section fmr-chart"><canvas id="fm-chart-xt"></canvas></div>
-          <div class="result-section fmr-chart"><canvas id="fm-chart-yt"></canvas></div>
+    <!-- 카드: 제목줄(⠿)을 끌어 이동, 오른쪽 아래 모서리로 크기 조정 (freeMotion.js _initResultGrid) -->
+    <div id="fm-result-grid" class="grid-stack fmr-cards">
+      <div class="grid-stack-item" gs-id="fit">
+        <div class="grid-stack-item-content fmr-card ">
+          <div class="fmr-drag"><span class="fmr-grip">⠿</span>회귀 분석</div>
+          <div class="fmr-body">
+            <div id="fm-fit-info" class="fm-fit-info"></div>
+          </div>
         </div>
-        <div class="fmr-lower">
-          <div class="result-section fmr-chart"><canvas id="fm-chart-xy"></canvas></div>
-          <div class="result-section fmr-table">
+      </div>
+      <div class="grid-stack-item" gs-id="student">
+        <div class="grid-stack-item-content fmr-card ">
+          <div class="fmr-drag"><span class="fmr-grip">⠿</span>학생 정보</div>
+          <div class="fmr-body">
+            <div class="fmr-student">
+              <label>학번 <input type="text" id="fm-student-class" placeholder="10101" maxlength="5" inputmode="numeric"></label>
+              <label>이름 <input type="text" id="fm-student-name" placeholder="홍길동"></label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-stack-item" gs-id="bridge" id="fm-bridge-section">
+        <div class="grid-stack-item-content fmr-card fmr-submit">
+          <div class="fmr-drag"><span class="fmr-grip">⠿</span>📤 과제에 결과 제출</div>
+          <div class="fmr-body">
+            <p id="fm-bridge-status" class="fmr-note">분석이 끝나면 아래 버튼으로 결과를 과제에 제출하세요. 다시 제출하면 최신 결과로 바뀝니다.</p>
+            <div class="fmr-actions">
+              <button id="fm-btn-bridge-submit" class="btn-primary">📤 과제에 결과 제출</button>
+              <button id="fm-btn-bridge-return" class="btn-essay hidden">📝 보고서 작성하러 가기 ↗</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-stack-item" gs-id="save">
+        <div class="grid-stack-item-content fmr-card ">
+          <div class="fmr-drag"><span class="fmr-grip">⠿</span>저장</div>
+          <div class="fmr-body">
+            <div class="fmr-actions">
+              <button id="fm-btn-cloud-save" class="btn-secondary">☁ 클라우드 저장</button>
+              <button id="fm-btn-report" class="btn-ghost">📄 PNG 다운로드</button>
+            </div>
+            <p id="fm-cloud-save-status" class="fmr-note">클라우드에 저장하면 나중에 다시 볼 수 있습니다.</p>
+          </div>
+        </div>
+      </div>
+      <div class="grid-stack-item" gs-id="xt">
+        <div class="grid-stack-item-content fmr-card ">
+          <div class="fmr-drag"><span class="fmr-grip">⠿</span>x-t 그래프</div>
+          <div class="fmr-body">
+            <div class="fmr-chart-box"><canvas id="fm-chart-xt"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-stack-item" gs-id="yt">
+        <div class="grid-stack-item-content fmr-card ">
+          <div class="fmr-drag"><span class="fmr-grip">⠿</span>y-t 그래프</div>
+          <div class="fmr-body">
+            <div class="fmr-chart-box"><canvas id="fm-chart-yt"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-stack-item" gs-id="xy">
+        <div class="grid-stack-item-content fmr-card ">
+          <div class="fmr-drag"><span class="fmr-grip">⠿</span>궤적 (x-y)</div>
+          <div class="fmr-body">
+            <div class="fmr-chart-box"><canvas id="fm-chart-xy"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-stack-item" gs-id="table">
+        <div class="grid-stack-item-content fmr-card ">
+          <div class="fmr-drag"><span class="fmr-grip">⠿</span>측정 데이터</div>
+          <div class="fmr-body">
             <div class="fmr-sec-head">
-              <h3>측정 데이터</h3>
               <button id="fm-btn-copy-table" class="btn-secondary fmr-small-btn">📋 복사 (Sheets)</button>
               <span id="fm-copy-status" class="fmr-copy-status"></span>
             </div>
@@ -599,41 +667,6 @@
           </div>
         </div>
       </div>
-
-      <!-- 오른쪽: 회귀 분석 · 학생 정보 · 제출/저장 -->
-      <aside class="fmr-side">
-        <div class="result-section">
-          <h3>회귀 분석</h3>
-          <div id="fm-fit-info" class="fm-fit-info"></div>
-        </div>
-
-        <div class="result-section">
-          <h3>학생 정보</h3>
-          <div class="fmr-student">
-            <label>학번 <input type="text" id="fm-student-class" placeholder="10101" maxlength="5" inputmode="numeric"></label>
-            <label>이름 <input type="text" id="fm-student-name" placeholder="홍길동"></label>
-          </div>
-        </div>
-
-        <!-- 과제 제출 (과제 연결 상태에서만 표시) -->
-        <div id="fm-bridge-section" class="result-section fmr-submit hidden">
-          <h3>📤 과제에 결과 제출</h3>
-          <p id="fm-bridge-status" class="fmr-note">분석이 끝나면 아래 버튼으로 결과를 과제에 제출하세요. 다시 제출하면 최신 결과로 바뀝니다.</p>
-          <div class="fmr-actions">
-            <button id="fm-btn-bridge-submit" class="btn-primary">📤 과제에 결과 제출</button>
-            <button id="fm-btn-bridge-return" class="btn-secondary hidden">✍ 보고서 작성으로 돌아가기</button>
-          </div>
-        </div>
-
-        <div class="result-section">
-          <h3>저장</h3>
-          <div class="fmr-actions">
-            <button id="fm-btn-cloud-save" class="btn-secondary">☁ 클라우드 저장</button>
-            <button id="fm-btn-report" class="btn-ghost">📄 PNG 다운로드</button>
-          </div>
-          <p id="fm-cloud-save-status" class="fmr-note">클라우드에 저장하면 나중에 다시 볼 수 있습니다.</p>
-        </div>
-      </aside>
     </div>
   </section>
 

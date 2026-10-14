@@ -2163,13 +2163,6 @@ body.lock-viewport #app { height: 100vh; height: 100dvh; min-height: 0; overflow
 .fmr-meta { display: flex; gap: 4px 14px; flex-wrap: wrap; font-size: 13px; color: var(--text-dim); margin-left: auto; }
 #fm-result-origin-info { color: #b8860b; }
 
-.fmr-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 12px; align-items: start; }
-.fmr-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.fmr-side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; min-width: 0; }
-.fmr-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.fmr-lower  { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
-.fmr-chart { height: 260px; position: relative; padding: 8px !important; min-width: 0; }
-
 .fmr-sec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .fmr-sec-head h3 { margin: 0 !important; }
 .fmr-small-btn { min-height: 32px; padding: 0 10px; font-size: 12px; }
@@ -2181,25 +2174,18 @@ body.lock-viewport #app { height: 100vh; height: 100dvh; min-height: 0; overflow
 .fmr-table-wrap .data-table th, .fmr-table-wrap .data-table td { padding: 4px 8px; }
 .fmr-table-wrap .data-table thead th { position: sticky; top: 0; }
 
-.fmr-student { display: grid; grid-template-columns: 110px 1fr; gap: 8px; }
-.fmr-student label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); }
+.fmr-student { display: grid; grid-template-columns: 120px 1fr; gap: 8px; }
+.fmr-student label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); white-space: nowrap; }
 .fmr-student input {
-  min-height: 42px; padding: 0 10px; font-size: 15px; width: 100%;
+  min-height: 40px; min-width: 0; padding: 0 10px; font-size: 15px; width: 100%;
   background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
 }
 .fmr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.fmr-actions button { flex: 1 1 140px; min-height: 48px; font-size: 15px; }
+.fmr-actions button { flex: 0 0 auto; min-height: 44px; padding: 0 18px; font-size: 14px; }
 .fmr-note { font-size: 13px; color: var(--text-dim); margin: 8px 0 0; }
-.fmr-submit { border: 2px solid var(--primary); }
+.fmr-card.fmr-submit { border: 2px solid var(--primary); }
 #screen-free-result .fm-fit-info { font-size: 14px; gap: 4px; }
 
-@media (max-width: 1023px) {
-  .fmr-grid { grid-template-columns: 1fr; }
-  .fmr-side { position: static; order: -1; }   /* 좁은 화면: 회귀·제출을 그래프보다 위로 */
-  .fmr-meta { margin-left: 0; }
-}
-@media (max-width: 640px) {
-  .fmr-charts, .fmr-lower { grid-template-columns: 1fr; }
 }
 
 /* ── 조준경 확대 (loupe.js) ── */
@@ -2207,3 +2193,30 @@ body.lock-viewport #app { height: 100vh; height: 100dvh; min-height: 0; overflow
   position: fixed; z-index: 1000; pointer-events: none;
   border-radius: 50%; box-shadow: 0 4px 18px rgba(0,0,0,0.6);
 }
+
+/* 점·보정 표시 전용 오버레이 — 영상 캔버스 위에 겹치고 입력은 통과시킨다 */
+.fm-overlay { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 2; }
+
+/* 결과 카드 (GridStack) */
+.fmr-cards { margin: 0 -6px; }
+.fmr-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12); display: flex; flex-direction: column; overflow: hidden !important;
+}
+.fmr-drag {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 7px 12px; font-size: 14px; font-weight: 700; color: var(--accent);
+  border-bottom: 1px solid var(--border); cursor: grab; user-select: none; touch-action: none;
+}
+.fmr-drag:active { cursor: grabbing; }
+.fmr-grip { color: var(--text-dim); font-size: 16px; line-height: 1; }
+.fmr-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; position: relative; }
+.fmr-chart-box { position: absolute; inset: 6px 8px; }
+.fmr-reset { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.grid-stack-item > .ui-resizable-se { width: 18px; height: 18px; }
+
+/* 다른 앱(essay)으로 가는 버튼 — 분석 앱 버튼과 구분되는 보라 테두리 */
+.btn-essay {
+  background: #fff; color: #4f46e5; border: 2px solid #6366f1; font-weight: 700;
+}
+.btn-essay:hover { background: #eef2ff; }

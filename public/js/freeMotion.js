@@ -392,8 +392,10 @@ function _bindTrack() {
     _updateResultInfo();
     $('fm-btn-report').classList.toggle('hidden', Boolean(getBridge()));  // 과제 연결 시엔 제출로 대신
     _show('free-result');
+    _initResultGrid();
     _renderGraphs();
   });
+  $('fm-btn-reset-layout').addEventListener('click', _resetLayout);
   $('fm-btn-back-track').addEventListener('click', () => _show('free-track'));
   $('fm-btn-apply-name').addEventListener('click', () => {
     const name = $('fm-result-name-edit').value.trim() || '자유 물체 운동 분석';
@@ -532,11 +534,72 @@ function _pt(e) {
   };
 }
 
-// 캔버스 px / 화면 px — 점·글자·탭 판정 크기를 화면 기준으로 맞춘다 (확대 배율 포함)
+// 점·글자·탭 판정 크기 계수 (영상 px 단위로 곱해 쓴다)
+//   확대하지 않았을 때 화면에서 기준 크기, 영상을 z배 확대하면 √z배로 커진다 (영상만큼 커지면 화면을 덮음)
 function _k() {
   const cvs = $('fm-canvas');
   const r   = cvs.getBoundingClientRect();
-  return r.width ? cvs.width / r.width : 1;
+  const z   = fmZoom?.scale || 1;
+  return r.width ? cvs.width * Math.sqrt(z) / r.width : 1;
+}
+
+// 확대 전 기준 크기 계수 — 보고서 PNG처럼 영상 해상도로 그릴 때 사용
+// (결과 화면에서는 캔버스가 숨겨져 크기를 잴 수 없으므로 마지막으로 잰 값을 기억)
+let _lastKFit = 1;
+function _kFit() {
+  const cvs = $('fm-canvas');
+  const r   = cvs.getBoundingClientRect();
+  const z   = fmZoom?.scale || 1;
+  if (r.width) _lastKFit = cvs.width * z / r.width;
+  return _lastKFit;
+}
+
+// ─── 오버레이 캔버스 ─────────────────────────────────────────
+// 점·보정·원점 표시는 영상 캔버스(CSS로 확대됨)가 아니라 화면 해상도의 별도 캔버스에 그려
+// 확대해도 글자·선이 뭉개지지 않게 한다. 좌표는 transform으로 영상 px → 화면 px 변환.
+let _ovDpr = 1;
+function _overlayCtx() {
+  const ov   = $('fm-overlay');
+  const cvs  = $('fm-canvas');
+  const wrap = $('fm-canvas-wrapper');
+  if (!ov || !wrap || !cvs.width) return null;
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  if (!w || !h) return null;
+  _ovDpr = Math.min(window.devicePixelRatio || 1, 3);
+  const W = Math.round(w * _ovDpr), H = Math.round(h * _ovDpr);
+  if (ov.width !== W || ov.height !== H) {
+    ov.width = W; ov.height = H;
+    ov.style.width = w + 'px'; ov.style.height = h + 'px';
+  }
+  const ctx = ov.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const r  = cvs.getBoundingClientRect();
+  const wr = wrap.getBoundingClientRect();
+  if (!r.width) return null;
+  const a = r.width / cvs.width;
+  ctx.setTransform(_ovDpr * a, 0, 0, _ovDpr * a,
+                   _ovDpr * (r.left - wr.left - wrap.clientLeft),
+                   _ovDpr * (r.top  - wr.top  - wrap.clientTop));
+  return ctx;
+}
+
+function _drawOverlays(ctx, k) {
+  calib.drawDimension(ctx, k);
+  _drawOrigin(ctx, k);
+  _drawPoints(ctx, k);
+  if (st.dragState) _drawBox(ctx, k);
+}
+
+// 보고서용: 영상 해상도 사본에 영상 + 표시를 합성한다
+function _exportTrackingCanvas() {
+  const cvs = $('fm-canvas');
+  const c   = document.createElement('canvas');
+  c.width = cvs.width; c.height = cvs.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(cvs, 0, 0);
+  _drawOverlays(ctx, _kFit());
+  return c;
 }
 
 function _showLoupe(e, x, y, color) {
@@ -661,7 +724,7 @@ function _move(e) {
     _showLoupe(e, x, y, '#ff5722');
     _redraw(); return;
   }
-  if (st.dragState?.active) { st.dragState.endX = x; st.dragState.endY = y; _redraw(); _drawBox(cvs); }
+  if (st.dragState?.active) { st.dragState.endX = x; st.dragState.endY = y; _redraw(); }
 }
 
 function _up(e) {
@@ -709,7 +772,7 @@ function _up(e) {
   autoTracker.seedFromBox($('fm-canvas'), bx, by, bw, bh);
   $('fm-auto-seed').textContent = `선택 완료 (${Math.round(bw)}×${Math.round(bh)}px) — 추적 시작을 누르세요`;
   $('fm-btn-start-auto').disabled = false;
-  _redraw(); _drawBox($('fm-canvas'));
+  _redraw();
 }
 
 // ─── 자동 추적 ───────────────────────────────────────────────
@@ -766,7 +829,7 @@ async function _runAuto(resume) {
       endX:   x + autoTracker.thW, endY:   y + autoTracker.thH,
       active: false, lowConf: false,
     };
-    _drawBox($('fm-canvas'));
+    _redraw();
 
     const pct = Math.round(confidence * 100);
     $('fm-auto-conf-bar').style.width      = pct + '%';
@@ -797,21 +860,19 @@ async function _runAuto(resume) {
 // ─── 캔버스 그리기 ───────────────────────────────────────────
 function _redraw() {
   const cvs = $('fm-canvas');
-  const ctx = cvs.getContext('2d');
-  ctx.clearRect(0, 0, cvs.width, cvs.height);
-  vc.drawCurrentFrame();
-  calib.drawDimension(ctx, _k());
-  _drawOrigin(ctx, cvs);
-  _drawPoints(ctx, cvs);
-  if (st.dragState) _drawBox(cvs);
+  cvs.getContext('2d').clearRect(0, 0, cvs.width, cvs.height);
+  vc.drawCurrentFrame();                 // 영상 캔버스에는 영상만 (자동 추적이 이 픽셀을 읽음)
+  const ctx = _overlayCtx();
+  if (ctx) { _kFit(); _drawOverlays(ctx, _k()); }
   _syncOriginBtn();
   _scheduleSave();
 }
 
-function _drawOrigin(ctx, cvs) {
+function _drawOrigin(ctx, k) {
   if (!st.origin) return;
   const { xPx: ox, yPx: oy } = st.origin;
-  const W = cvs.width, H = cvs.height, k = _k();
+  const cvs = $('fm-canvas');
+  const W = cvs.width, H = cvs.height;
   ctx.save();
   // 좌표축 점선
   ctx.strokeStyle = 'rgba(255,215,0,0.55)'; ctx.lineWidth = 1.5 * k; ctx.setLineDash([8 * k, 5 * k]);
@@ -836,10 +897,10 @@ function _drawOrigin(ctx, cvs) {
 const NUMS = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩',
               '⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
 
-function _drawPoints(ctx, cvs) {
+function _drawPoints(ctx, k) {
   const pts = tracker.points;
   if (pts.length === 0) return;
-  const k = _k();
+  const cvs = $('fm-canvas');
   ctx.save();
   // 가이드 선 (h + v, 각 점)
   pts.forEach(p => {
@@ -897,21 +958,105 @@ function _drawPoints(ctx, cvs) {
   ctx.restore();
 }
 
-function _drawBox(cvs) {
+function _drawBox(ctx, k) {
   if (!st.dragState) return;
-  const ctx = cvs.getContext('2d');
   const x = Math.min(st.dragState.startX, st.dragState.endX);
   const y = Math.min(st.dragState.startY, st.dragState.endY);
   const w = Math.abs(st.dragState.endX - st.dragState.startX);
   const h = Math.abs(st.dragState.endY - st.dragState.startY);
   const col = st.dragState.lowConf ? '#ffa726' : '#00e5ff';
   ctx.save();
-  ctx.strokeStyle = col; ctx.lineWidth = 2;
-  ctx.setLineDash(st.dragState.active ? [6, 3] : []);
+  ctx.strokeStyle = col; ctx.lineWidth = 2 * k;
+  ctx.setLineDash(st.dragState.active ? [6 * k, 3 * k] : []);
   ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
   ctx.fillStyle = col;
-  [[x, y],[x+w, y],[x, y+h],[x+w, y+h]].forEach(([px, py]) => ctx.fillRect(px-4, py-4, 8, 8));
+  [[x, y],[x+w, y],[x, y+h],[x+w, y+h]].forEach(([px, py]) => ctx.fillRect(px-4*k, py-4*k, 8*k, 8*k));
   ctx.restore();
+}
+
+// ─── 결과 화면 카드 배치 (GridStack) ─────────────────────────
+// 학생이 카드 제목줄을 끌어 옮기고 모서리로 크기를 바꾼다. 배치는 기기(localStorage)에 기억.
+const LAYOUT_KEY = 'fmrLayout:v2';
+const LAYOUT_DEFAULT = {
+  12: {
+    xt:    { x: 0, y: 0, w: 4, h: 8 }, yt:      { x: 4, y: 0,  w: 4, h: 8 },
+    xy:    { x: 0, y: 8, w: 4, h: 8 }, table:   { x: 4, y: 8,  w: 4, h: 8 },
+    fit:   { x: 8, y: 0, w: 4, h: 5 }, student: { x: 8, y: 5,  w: 4, h: 3 },
+    bridge:{ x: 8, y: 8, w: 4, h: 5 }, save:    { x: 8, y: 13, w: 4, h: 4 },
+  },
+  // 좁은 화면: 한 줄로 — 회귀·제출을 그래프보다 위에
+  1: {
+    fit:   { x: 0, y: 0,  w: 1, h: 5 }, student: { x: 0, y: 5,  w: 1, h: 3 },
+    bridge:{ x: 0, y: 8,  w: 1, h: 5 }, save:    { x: 0, y: 13, w: 1, h: 4 },
+    xt:    { x: 0, y: 17, w: 1, h: 8 }, yt:      { x: 0, y: 25, w: 1, h: 8 },
+    xy:    { x: 0, y: 33, w: 1, h: 8 }, table:   { x: 0, y: 41, w: 1, h: 9 },
+  },
+};
+let _grid = null, _gridCols = 0, _applyingLayout = false;
+
+function _colsForWidth() { return window.innerWidth >= 1024 ? 12 : 1; }
+
+function _loadLayouts() {
+  try { return JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}') || {}; } catch { return {}; }
+}
+
+function _initResultGrid() {
+  if (typeof GridStack === 'undefined') return;   // CDN 실패 시 카드가 그냥 쌓여 보인다
+  if (!_grid) {
+    const cols = _colsForWidth();
+    const pos  = _layoutFor(cols);
+    document.querySelectorAll('#fm-result-grid > .grid-stack-item').forEach(el => {
+      const p = pos[el.getAttribute('gs-id')];
+      if (p) ['x', 'y', 'w', 'h'].forEach(key => el.setAttribute('gs-' + key, p[key]));
+    });
+    _grid = GridStack.init({
+      column: cols, cellHeight: 40, margin: 6, float: false, animate: true,
+      draggable: { handle: '.fmr-drag' },
+      resizable: { handles: 'se' },
+    }, '#fm-result-grid');
+    if (!getBridge()) _grid.removeWidget($('fm-bridge-section'), true);  // 과제 연결이 아니면 제출 카드 제거
+    _gridCols = cols;
+    _grid.on('change', _saveLayout);
+    window.addEventListener('resize', () => {
+      if (_grid && _colsForWidth() !== _gridCols) _applyLayout();
+    });
+  }
+  _applyLayout();
+}
+
+function _layoutFor(cols) {
+  return { ...LAYOUT_DEFAULT[cols], ...(_loadLayouts()[cols] || {}) };
+}
+
+function _applyLayout() {
+  const cols = _colsForWidth();
+  _applyingLayout = true;
+  if (cols !== _gridCols) { _grid.column(cols, 'none'); _gridCols = cols; }
+  const pos = _layoutFor(cols);
+  // load()는 id가 같은 카드를 한꺼번에 옮겨 서로 밀어내지 않는다
+  _grid.load(_grid.getGridItems().map(el => {
+    const id = el.getAttribute('gs-id');
+    return { id, ...pos[id] };
+  }), false);
+  _applyingLayout = false;
+}
+
+function _saveLayout() {
+  if (_applyingLayout || !_grid) return;
+  const all = _loadLayouts();
+  all[_gridCols] = Object.fromEntries(_grid.getGridItems().map(el => {
+    const n = el.gridstackNode;
+    return [el.getAttribute('gs-id'), { x: n.x, y: n.y, w: n.w, h: n.h }];
+  }));
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(all)); } catch { /* 저장 불가 환경 */ }
+}
+
+function _resetLayout() {
+  if (!_grid) return;
+  const all = _loadLayouts();
+  delete all[_gridCols];
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(all)); } catch { /* 저장 불가 환경 */ }
+  _applyLayout();
 }
 
 // ─── 보고서 입력값 (PNG 다운로드·과제 제출 공통) ───────────────
@@ -924,7 +1069,7 @@ function _reportInputs() {
     className:   $('fm-student-class').value.trim() || '00000',
     date:        new Date().toLocaleDateString('ko-KR').replace(/\s/g, ''),
     motionLabel: $('fm-motion-name').value.trim()   || '자유물체운동',
-    trackingCanvas: cropTrajectoryCanvas($('fm-canvas'), tracker.points),
+    trackingCanvas: cropTrajectoryCanvas(_exportTrackingCanvas(), tracker.points),
     data, fit, calibration: calib,
     fitLines: fitSummaryLines(fit, calib.unit),
     chartCanvases: {
@@ -1197,6 +1342,7 @@ function _fit() {
   const scale = Math.min(availW / cvs.width, availH / cvs.height);
   cvs.style.width  = Math.round(cvs.width  * scale) + 'px';
   cvs.style.height = Math.round(cvs.height * scale) + 'px';
+  if (vc?.video?.readyState >= 2) _redraw();   // 오버레이를 새 크기에 맞춰 다시 그림
 }
 
 // ── 자유 물체 운동 보고서 목록 ────────────────────────────

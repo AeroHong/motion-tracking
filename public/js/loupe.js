@@ -3,7 +3,9 @@
 //   손가락에 가리지 않도록 포인터의 왼쪽 위에 띄우고, 화면 가장자리에서는 반대쪽으로 뒤집는다.
 
 const SIZE   = 140;   // 화면 px (지름)
-const ZOOM   = 4;     // 화면 기준 확대 배율
+const ZOOM   = 4;     // 화면 기준 최대 확대 배율
+const MIN_ZOOM = 1.25;
+const MAX_PX_PER_SRC = 6;   // 루페에서 영상 1px이 차지할 최대 화면 px — 영상을 이미 확대했으면 루페 배율을 줄여 뭉개짐 방지
 const OFFSET = 110;   // 포인터와 루페 중심 사이 거리 (화면 px)
 
 export class Loupe {
@@ -34,7 +36,9 @@ export class Loupe {
     const rect = this.target.getBoundingClientRect();
     if (!rect.width) return;
     const k   = this.target.width / rect.width;      // 캔버스 px / 화면 px
-    const src = (SIZE / ZOOM) * k;                   // 원본에서 잘라 올 한 변 (캔버스 px)
+    const zoom = Math.min(ZOOM, Math.max(MIN_ZOOM, MAX_PX_PER_SRC * k));
+    this.lastZoom = zoom;
+    const src = (SIZE / zoom) * k;                   // 원본에서 잘라 올 한 변 (캔버스 px)
 
     const ctx = this.ctx, S = this.canvas.width;
     ctx.save();
@@ -43,7 +47,8 @@ export class Loupe {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, S, S);
     // 영상 원본 좌표 = 캔버스 좌표 (캔버스 크기 = 영상 크기)
     if (this.video.readyState >= 2) {
-      ctx.imageSmoothingEnabled = false;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(this.video, cx - src / 2, cy - src / 2, src, src, 0, 0, S, S);
     }
     // 십자선
