@@ -383,16 +383,6 @@
     </div>
 
     <!-- 클라우드 저장 상태 -->
-    <!-- 과제 제출 (과제 연결 상태에서만 표시) -->
-    <div id="fm-bridge-section" class="result-section hidden">
-      <h3>📤 과제에 결과 제출</h3>
-      <p id="fm-bridge-status" style="font-size:14px;color:var(--text-dim);">분석이 끝나면 아래 버튼으로 결과를 과제에 제출하세요. 다시 제출하면 최신 결과로 바뀝니다.</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-        <button id="fm-btn-bridge-submit" class="btn-primary">📤 과제에 결과 제출</button>
-        <button id="fm-btn-bridge-return" class="btn-secondary hidden">✍ 보고서 작성으로 돌아가기</button>
-      </div>
-    </div>
-
     <div class="result-section">
       <h3>☁ 클라우드 저장</h3>
 
@@ -605,6 +595,16 @@
       </div>
       <button id="fm-btn-report" class="btn-primary">📄 보고서 저장 (PNG)</button>
     </div>
+    <!-- 과제 제출 (과제 연결 상태에서만 표시) -->
+    <div id="fm-bridge-section" class="result-section hidden">
+      <h3>📤 과제에 결과 제출</h3>
+      <p id="fm-bridge-status" style="font-size:14px;color:var(--text-dim);">분석이 끝나면 아래 버튼으로 결과를 과제에 제출하세요. 다시 제출하면 최신 결과로 바뀝니다.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+        <button id="fm-btn-bridge-submit" class="btn-primary">📤 과제에 결과 제출</button>
+        <button id="fm-btn-bridge-return" class="btn-secondary hidden">✍ 보고서 작성으로 돌아가기</button>
+      </div>
+    </div>
+
     <button id="fm-btn-back-track" class="btn-ghost">← 트래킹으로 돌아가기</button>
   </section>
 
