@@ -67,25 +67,32 @@ export function initFreeMotion(showScreen) {
 }
 
 // ─── 업로드 이벤트 ───────────────────────────────────────────
+function _setFileLabel(name) {
+  const el = $('fm-filename');
+  el.textContent = `✓ ${name}`;
+  el.classList.add('is-set');
+}
+
 function _bindUpload() {
   $('fm-local-btn').addEventListener('click', () => $('fm-file-input').click());
   $('fm-drive-btn').addEventListener('click', async () => {
-    const btn = $('fm-drive-btn');
-    btn.disabled = true; btn.textContent = '불러오는 중...';
+    const btn   = $('fm-drive-btn');
+    const label = btn.querySelector('.fmu-pick-label');
+    btn.disabled = true; label.textContent = '불러오는 중...';
     try {
       const { blob, name, fileId } = await pickVideoFromDrive();
-      $('fm-filename').textContent = `✓ ${name}`;
+      _setFileLabel(name);
       await _loadVideo(blob, { type: 'drive', fileId, name });
     } catch (e) {
       if (e.message !== '취소됨') alert('영상을 불러올 수 없습니다.\n' + e.message);
     } finally {
-      btn.disabled = false; btn.textContent = '📂 드라이브';
+      btn.disabled = false; label.textContent = '구글 드라이브';
     }
   });
   $('fm-file-input').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
-    $('fm-filename').textContent = `✓ ${file.name}`;
+    _setFileLabel(file.name);
     const resume = _pendingResume;
     _pendingResume = null;
     await _loadVideo(file, { type: 'local', name: file.name, size: file.size });
@@ -216,7 +223,7 @@ function _bindResume() {
     $('fm-resume-status').textContent = '';
     try {
       const blob = await downloadDriveVideo(src.fileId);
-      $('fm-filename').textContent = `✓ ${src.name || '드라이브 영상'}`;
+      _setFileLabel(src.name || '드라이브 영상');
       await _loadVideo(blob, { ...src });
       await _applySession(s);
     } catch (e) {

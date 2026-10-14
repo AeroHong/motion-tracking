@@ -2075,10 +2075,74 @@ body.lock-viewport #app { height: 100vh; height: 100dvh; min-height: 0; overflow
 .ebb-actions { display: flex; gap: 8px; }
 .ebb-actions button { min-height: 48px; }
 
-/* ── 자유 물체 운동: 이전 작업 이어서 하기 (fmSession.js) ── */
-.fm-resume-card { border: 1px solid rgba(102,187,106,0.5); }
-.fm-resume-info { font-size: 15px; font-weight: 600; margin: 4px 0; word-break: break-all; }
-.fm-resume-hint { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
-.fm-resume-card .drive-pick-btn { min-height: 48px; }
+/* ── 자유 물체 운동: 업로드 화면 (fmu-) ── */
+#screen-free-upload { padding: 24px 16px 32px; }
+.fmu-wrap { width: 100%; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.fmu-head { display: flex; align-items: center; gap: 12px; }
+.fmu-back {
+  min-height: 40px; padding: 0 14px; font-size: 14px;
+  background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: 8px;
+}
+.fmu-back:hover { color: var(--text); }
+.fmu-title { font-size: 20px; font-weight: 700; color: var(--text); }
+
+.fmu-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 22px 24px; display: flex; flex-direction: column; gap: 14px;
+}
+
+.fmu-step { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--text); }
+.fmu-step + .fmu-step, .fmu-file + .fmu-step { margin-top: 8px; }
+.fmu-num {
+  width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; font-size: 14px; flex-shrink: 0;
+}
+
+.fmu-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fmu-pick-btn {
+  min-height: 64px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: 16px; font-weight: 600; border-radius: 12px;
+  background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+}
+.fmu-pick-btn:hover:not(:disabled) { border-color: var(--accent); }
+.fmu-pick-drive { background: var(--accent); border-color: var(--accent); color: #fff; }
+.fmu-pick-ico { font-size: 22px; }
+
+.fmu-file {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: 10px; background: var(--surface2); font-size: 14px;
+}
+.fmu-filename { color: var(--text-dim); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fmu-filename.is-set { color: #66bb6a; }
+.fmu-fps-status { color: var(--text-dim); font-size: 13px; }
+
+.fmu-fields { display: flex; gap: 12px; flex-wrap: wrap; }
+.fmu-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-dim); }
+.fmu-field-grow { flex: 1; min-width: 200px; }
+.fmu-field-fps { width: 120px; }
+.fmu-field input {
+  min-height: 46px; padding: 0 12px; font-size: 16px; color: var(--text);
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; width: 100%;
+}
+.fmu-field input:focus { outline: none; border-color: var(--accent); }
+
+.fmu-start { min-height: 56px; font-size: 17px; font-weight: 700; border-radius: 12px; margin-top: 6px; }
+.fmu-start:disabled { background: var(--surface2); color: var(--text-dim); opacity: 1; cursor: not-allowed; }
+
+.fmu-resume { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; border-color: rgba(102,187,106,0.55); }
+.fmu-resume-text { flex: 1; min-width: 220px; }
+.fmu-resume-title { font-size: 15px; font-weight: 700; color: #66bb6a; margin-bottom: 4px; }
+.fm-resume-info { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.fm-resume-hint { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
 .fm-resume-status { font-size: 13px; color: #ffa726; margin-top: 6px; }
 .fm-resume-status:empty { display: none; }
+.fmu-resume-actions { display: flex; gap: 8px; }
+.fmu-resume-actions button { min-height: 48px; padding: 0 18px; font-size: 15px; }
+
+.fmu-reports { gap: 10px; }
+.fmu-step-plain { font-size: 15px; color: var(--text-dim); }
+
+@media (max-width: 560px) {
+  .fmu-card { padding: 18px 16px; }
+  .fmu-pick { grid-template-columns: 1fr; }
+}
