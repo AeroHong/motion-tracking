@@ -2074,3 +2074,11 @@ body.lock-viewport #app { height: 100vh; height: 100dvh; min-height: 0; overflow
 .ebb-meta .ebb-warn { color: #ffa726; font-weight: 600; }
 .ebb-actions { display: flex; gap: 8px; }
 .ebb-actions button { min-height: 48px; }
+
+/* ── 자유 물체 운동: 이전 작업 이어서 하기 (fmSession.js) ── */
+.fm-resume-card { border: 1px solid rgba(102,187,106,0.5); }
+.fm-resume-info { font-size: 15px; font-weight: 600; margin: 4px 0; word-break: break-all; }
+.fm-resume-hint { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
+.fm-resume-card .drive-pick-btn { min-height: 48px; }
+.fm-resume-status { font-size: 13px; color: #ffa726; margin-top: 6px; }
+.fm-resume-status:empty { display: none; }

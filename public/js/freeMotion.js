@@ -6,7 +6,11 @@ import { Calibration }               from './calibration.js';
 import { Tracker }                   from './tracker.js';
 import { AutoTracker }               from './autotracker.js';
 import { GraphRenderer }             from './graphs.js';
-import { pickVideoFromDrive }        from './drivePicker.js';
+import { pickVideoFromDrive,
+         downloadDriveVideo }        from './drivePicker.js';
+import { loadFreeSession, saveFreeSession,
+         clearFreeSession }          from './fmSession.js';
+import { onAuthStateChanged }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { generateFreeMotionReport,
          renderFreeMotionReportBlob,
          cropTrajectoryCanvas }               from './report.js';
@@ -37,6 +41,14 @@ const st = {
 
 let vc, calib, tracker, autoTracker, graphs, fmZoom;
 
+// 작업 자동 저장 (fmSession.js) — 영상 출처 + 보정·원점·점만 저장, 영상 자체는 저장하지 않음
+let _videoSource   = null;  // {type:'drive', fileId, name} | {type:'local', name, size}
+let _savedSession  = null;  // 이어서 하기 카드에 띄운 이전 작업
+let _pendingResume = null;  // 로컬 파일 재선택을 기다리는 이전 작업
+let _lastSavedKey  = '';
+let _saveTimer     = null;
+const AUTOSAVE_DELAY_MS = 1500;
+
 // ─── 공개 초기화 ─────────────────────────────────────────────
 export function initFreeMotion(showScreen) {
   _show       = showScreen;
@@ -61,9 +73,9 @@ function _bindUpload() {
     const btn = $('fm-drive-btn');
     btn.disabled = true; btn.textContent = '불러오는 중...';
     try {
-      const { blob, name } = await pickVideoFromDrive();
+      const { blob, name, fileId } = await pickVideoFromDrive();
       $('fm-filename').textContent = `✓ ${name}`;
-      await _loadVideo(blob);
+      await _loadVideo(blob, { type: 'drive', fileId, name });
     } catch (e) {
       if (e.message !== '취소됨') alert('영상을 불러올 수 없습니다.\n' + e.message);
     } finally {
@@ -74,8 +86,17 @@ function _bindUpload() {
     const file = e.target.files[0];
     if (!file) return;
     $('fm-filename').textContent = `✓ ${file.name}`;
-    await _loadVideo(file);
+    const resume = _pendingResume;
+    _pendingResume = null;
+    await _loadVideo(file, { type: 'local', name: file.name, size: file.size });
     e.target.value = '';
+    if (resume) {
+      const prev = resume.videoSource || {};
+      const same = prev.name === file.name && prev.size === file.size;
+      if (same || confirm(`이전 작업 영상(${prev.name || '알 수 없음'})과 다른 파일입니다. 그래도 이전 작업을 이어서 할까요?`)) {
+        await _applySession(resume);
+      }
+    }
   });
   $('fm-capture-fps').addEventListener('change', e => {
     const fps = Math.max(1, parseFloat(e.target.value) || 1);
@@ -112,6 +133,144 @@ function _bindUpload() {
   });
 
   _checkFreeReport();
+  _bindResume();
+  $('fm-motion-name').addEventListener('change', _scheduleSave);
+  onAuthStateChanged(auth, user => { if (user) _showResumeCard(); });
+}
+
+// ─── 작업 자동 저장 / 이어서 하기 ─────────────────────────────
+function _sessionSnapshot() {
+  if (!_videoSource) return null;
+  if (!tracker.points.length && !calib.points.length && !st.origin) return null; // 아직 작업 없음
+  return {
+    videoSource: _videoSource,
+    motionName:  $('fm-motion-name').value.trim(),
+    fps:         parseFloat($('fm-track-fps').value) || null,
+    calib:       { points: calib.points.map(p => ({ x: p.x, y: p.y })), realLengthCm: calib.realLengthCm },
+    origin:      st.origin,
+    points:      tracker.points.map(p => ({ frame: p.frame, xPx: p.xPx, yPx: p.yPx, lowConf: !!p.lowConf })),
+  };
+}
+
+// 내용이 바뀌었을 때만 저장한다(프레임 이동만으로는 쓰지 않음 — Firestore 쓰기 한도 절약)
+function _scheduleSave() {
+  const snap = _sessionSnapshot();
+  if (!snap && !_lastSavedKey) return;          // 저장할 작업도, 지울 저장본도 없음
+  if (snap && JSON.stringify(snap) === _lastSavedKey) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_flushSave, AUTOSAVE_DELAY_MS);
+}
+
+async function _flushSave() {
+  clearTimeout(_saveTimer);
+  const snap = _sessionSnapshot();
+  if (!snap) {                                  // 초기화로 작업이 비면 저장본도 지운다
+    if (_lastSavedKey && _videoSource) {
+      try { await clearFreeSession(); _lastSavedKey = ''; }
+      catch (e) { console.warn('작업 저장본 삭제 실패:', e); }
+    }
+    return;
+  }
+  const key = JSON.stringify(snap);
+  if (key === _lastSavedKey) return;
+  try {
+    await saveFreeSession({ ...snap, frame: vc.currentFrame || 0 });
+    _lastSavedKey = key;
+  } catch (e) { console.warn('작업 자동 저장 실패:', e); }
+}
+
+async function _showResumeCard() {
+  const card = $('fm-resume-card');
+  if (!card) return;
+  if (_videoSource) { card.classList.add('hidden'); return; } // 이미 작업 중
+  try { _savedSession = await loadFreeSession(); }
+  catch (e) { console.warn('이전 작업 불러오기 실패:', e); _savedSession = null; }
+  if (!_savedSession || _videoSource) { card.classList.add('hidden'); return; }
+
+  const s     = _savedSession;
+  const src   = s.videoSource || {};
+  const dt    = s.updatedAt?.toDate?.();
+  const when  = dt ? dt.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  const calibStr = s.calib?.realLengthCm ? `보정 ${s.calib.realLengthCm}cm` : '보정 없음';
+  $('fm-resume-info').textContent =
+    `${src.type === 'drive' ? '📂' : '📁'} ${src.name || '영상'} · 점 ${(s.points || []).length}개 · ${calibStr}${when ? ` · ${when} 저장` : ''}`;
+  $('fm-resume-hint').textContent = src.type === 'drive'
+    ? '드라이브에서 같은 영상을 다시 불러와 이어서 작업합니다.'
+    : '이 기기에서 같은 영상 파일을 다시 선택하면 이어서 작업합니다.';
+  $('fm-resume-status').textContent = '';
+  card.classList.remove('hidden');
+}
+
+function _bindResume() {
+  $('fm-btn-resume')?.addEventListener('click', async () => {
+    const s = _savedSession;
+    if (!s) return;
+    const src = s.videoSource || {};
+    if (src.type !== 'drive') {           // 로컬 파일: 같은 파일을 다시 고르면 적용
+      _pendingResume = s;
+      $('fm-file-input').click();
+      return;
+    }
+    const btn = $('fm-btn-resume');
+    btn.disabled = true; btn.textContent = '영상 불러오는 중...';
+    $('fm-resume-status').textContent = '';
+    try {
+      const blob = await downloadDriveVideo(src.fileId);
+      $('fm-filename').textContent = `✓ ${src.name || '드라이브 영상'}`;
+      await _loadVideo(blob, { ...src });
+      await _applySession(s);
+    } catch (e) {
+      $('fm-resume-status').textContent = '⚠ ' + e.message;
+    } finally {
+      btn.disabled = false; btn.textContent = '▶ 이어서 하기';
+    }
+  });
+  $('fm-btn-resume-discard')?.addEventListener('click', async () => {
+    if (!confirm('이전 작업을 지우고 새로 시작할까요?')) return;
+    try { await clearFreeSession(); } catch (e) { console.warn('이전 작업 삭제 실패:', e); }
+    _savedSession = null;
+    $('fm-resume-card').classList.add('hidden');
+  });
+  // 탭이 백그라운드로 가면(안드로이드에서 탭이 정리될 수 있음) 즉시 저장
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') _flushSave();
+  });
+}
+
+async function _applySession(s) {
+  const fps = s.fps || parseFloat($('fm-capture-fps').value) || 30;
+  $('fm-capture-fps').value = fps;
+  $('fm-track-fps').value   = fps;
+  $('fm-fps-status').textContent = `이전 작업 값: ${fps}fps`;
+  vc.setFps(fps);
+  if (s.motionName) $('fm-motion-name').value = s.motionName;
+
+  calib.reset();
+  (s.calib?.points || []).forEach(p => calib.addPoint(p.x, p.y));
+  if (s.calib?.realLengthCm && calib.points.length === 2) calib.setRealLength(s.calib.realLengthCm);
+
+  tracker.reset();
+  (s.points || []).forEach(p => tracker.addPoint(p.xPx, p.yPx, p.frame, p.frame / fps, !!p.lowConf));
+
+  st.origin = s.origin || null;
+  if (st.origin) {
+    const idx = tracker.points.findIndex(p => p.xPx === st.origin.xPx && p.yPx === st.origin.yPx);
+    $('fm-origin-coords').textContent = idx >= 0 ? `점 ${idx + 1}번 선택됨` : '이전 작업에서 복원됨';
+    $('fm-origin-bar').classList.remove('hidden');
+  }
+
+  _lastSavedKey = JSON.stringify(_sessionSnapshot());
+  _savedSession = null;
+  $('fm-resume-card').classList.add('hidden');
+
+  _calibStatus();
+  _show('free-track');
+  _slider();
+  await vc.seekToFrame(Math.min(s.frame || 0, Math.max(0, vc.totalFrames - 1)));
+  $('fm-frame-slider').value = vc.currentFrame;
+  _setMode('pan');
+  _redraw(); _frameInfo();
+  requestAnimationFrame(() => requestAnimationFrame(_fit));
 }
 
 // ─── 트래킹 이벤트 ───────────────────────────────────────────
@@ -178,7 +337,7 @@ function _bindTrack() {
   $('fm-track-fps').addEventListener('change', e => {
     const fps = Math.max(1, parseFloat(e.target.value) || 1);
     e.target.value = fps; $('fm-capture-fps').value = fps;
-    vc.setFps(fps); tracker.recomputeTimes(fps); _slider(); _interval();
+    vc.setFps(fps); tracker.recomputeTimes(fps); _slider(); _interval(); _scheduleSave();
   });
   document.addEventListener('keydown', e => {
     if ($('screen-free-track').classList.contains('hidden')) return;
@@ -594,6 +753,7 @@ function _redraw() {
   _drawPoints(ctx, cvs);
   if (st.dragState) _drawBox(cvs);
   _syncOriginBtn();
+  _scheduleSave();
 }
 
 function _drawOrigin(ctx, cvs) {
@@ -911,7 +1071,11 @@ function _getData() {
 }
 
 // ─── 헬퍼 ────────────────────────────────────────────────────
-async function _loadVideo(file) {
+async function _loadVideo(file, source = null) {
+  await _flushSave();                       // 이전 영상의 작업을 먼저 저장
+  _videoSource  = source;
+  _lastSavedKey = '';
+  $('fm-resume-card')?.classList.add('hidden');
   $('fm-fps-status').textContent = 'fps 측정 중...';
   tracker.reset(); calib.reset(); autoTracker.reset();
   st.origin = null; st.dragState = null; st.selectedIdx = -1;

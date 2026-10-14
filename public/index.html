@@ -415,6 +415,18 @@
   <!-- ── 자유 물체 운동: 업로드 ───────────────── -->
   <section id="screen-free-upload" class="hidden">
 
+    <!-- 이전 작업 이어서 하기 (fmSession.js 자동 저장본이 있을 때만 표시) -->
+    <div id="fm-resume-card" class="upload-card fm-resume-card hidden">
+      <h3>⏯ 이전 작업이 있습니다</h3>
+      <p id="fm-resume-info" class="fm-resume-info"></p>
+      <p id="fm-resume-hint" class="fm-resume-hint"></p>
+      <div class="upload-row">
+        <button id="fm-btn-resume" class="btn-primary drive-pick-btn">▶ 이어서 하기</button>
+        <button id="fm-btn-resume-discard" class="btn-ghost drive-pick-btn">새로 시작</button>
+      </div>
+      <p id="fm-resume-status" class="fm-resume-status"></p>
+    </div>
+
     <!-- 저장된 보고서 목록 (있을 때만 표시) -->
     <div id="fm-prev-report-card" class="upload-card hidden">
       <h3>📂 저장된 보고서 목록</h3>

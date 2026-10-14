@@ -81,7 +81,7 @@ export async function pickImageFromDrive() {
         const { id, name } = data.docs[0];
         try {
           const blob = await _download(id, accessToken);
-          resolve({ blob, name });
+          resolve({ blob, name, fileId: id });
         } catch (e) {
           reject(e);
         }
@@ -114,7 +114,7 @@ export async function pickVideoFromDrive() {
         const { id, name } = data.docs[0];
         try {
           const blob = await _download(id, accessToken);
-          resolve({ blob, name });
+          resolve({ blob, name, fileId: id });
         } catch (e) {
           reject(e);
         }
@@ -123,6 +123,20 @@ export async function pickVideoFromDrive() {
 
     picker.setVisible(true);
   });
+}
+
+// 저장해 둔 드라이브 파일 ID로 영상을 다시 내려받는다 (작업 이어서 하기)
+// 클릭 핸들러에서 바로 호출해야 토큰 팝업이 차단되지 않는다
+export async function downloadDriveVideo(fileId) {
+  const accessToken = await getAccessToken();
+  try {
+    return await _download(fileId, accessToken);
+  } catch (e) {
+    if (/\((403|404)\)/.test(e.message)) {
+      throw new Error('드라이브에서 영상을 찾을 수 없습니다. 삭제되었거나 다른 계정의 파일일 수 있습니다.');
+    }
+    throw e;
+  }
 }
 
 async function _download(fileId, accessToken) {
