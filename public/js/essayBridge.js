@@ -148,7 +148,7 @@ export async function getMyResult() {
 
 /**
  * 분석 결과 제출. Storage 업로드 → Firestore 문서 저장(덮어쓰기, 제출 횟수 누적).
- * @param {object} r { pngBlob, studentName, motionLabel, unit, data, fit, calibration, origin, fps }
+ * @param {object} r { pngBlob, trackBlob, layout, studentName, motionLabel, unit, data, fit, calibration, origin, fps }
  */
 export async function submitExperimentResult(r) {
   const user = getEssayUser();
@@ -170,6 +170,15 @@ export async function submitExperimentResult(r) {
     await uploadBytes(objRef, r.pngBlob, { contentType: 'image/png' });
     const pngUrl = await getDownloadURL(objRef);
 
+    // 웹 보고서용 궤적 이미지 (영상 위에 점을 찍은 부분)
+    let trackPngPath = null, trackPngUrl = null;
+    if (r.trackBlob) {
+      trackPngPath = `experimentResults/${user.uid}/${aid}/track.png`;
+      const trackRef = ref(essayStorage, trackPngPath);
+      await uploadBytes(trackRef, r.trackBlob, { contentType: 'image/png' });
+      trackPngUrl = await getDownloadURL(trackRef);
+    }
+
     const docRef = doc(essayDb, 'experimentResults', `${aid}__${user.uid}`);
     const exists = (await getDoc(docRef)).exists();
     const c = r.calibration;
@@ -185,6 +194,11 @@ export async function submitExperimentResult(r) {
       unit:         r.unit,
       pngPath:      path,
       pngUrl,
+      // 결과 화면 배치 그대로의 웹 보고서 (essay ExperimentReport.jsx)
+      reportVersion: r.layout ? 2 : 1,
+      layout:        r.layout || null,
+      trackPngPath,
+      trackPngUrl,
       calib: c?.isCalibrated
         ? { scale: c.scale, realLengthCm: c.realLengthCm, pxDist: c.pixelDistance }
         : null,

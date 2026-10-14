@@ -12,8 +12,7 @@ import { pickVideoFromDrive,
 import { loadFreeSession, saveFreeSession,
          clearFreeSession }          from './fmSession.js';
 import { onAuthStateChanged }      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { generateFreeMotionReport,
-         renderFreeMotionReportBlob,
+import { renderFreeMotionLayoutBlob,
          cropTrajectoryCanvas }               from './report.js';
 import { getBridge, getEssayUser, essayLogin,
          submitExperimentResult, setBridgeStatus } from './essayBridge.js';
@@ -391,6 +390,7 @@ function _bindTrack() {
     $('fm-result-name-edit').value   = name;
     _updateResultInfo();
     $('fm-btn-report').classList.toggle('hidden', Boolean(getBridge()));  // 과제 연결 시엔 제출로 대신
+    _drawTrackCard();          // 화면이 바뀌기 전에(영상 캔버스 크기를 잴 수 있을 때) 궤적 이미지를 만든다
     _show('free-result');
     _initResultGrid();
     _renderGraphs();
@@ -410,7 +410,9 @@ function _bindTrack() {
     const btn = $('fm-btn-report');
     btn.disabled = true; btn.textContent = '생성 중...';
     try {
-      await generateFreeMotionReport(_reportInputs());
+      const r    = _reportInputs();
+      const blob = await renderFreeMotionLayoutBlob(r);
+      _download(blob, `운동분석_${r.motionLabel}_${r.studentName}_${r.className}_${r.date}.png`);
     } catch (e) {
       alert('보고서 생성 실패: ' + e.message);
     } finally {
@@ -426,7 +428,7 @@ function _bindTrack() {
     try {
       const r = _reportInputs();
       const { studentName, className, motionLabel, data, fit } = r;
-      const pngBlob = await renderFreeMotionReportBlob(r);
+      const pngBlob = await renderFreeMotionLayoutBlob(r);
       await saveFreeMotionReportToCloud({
         studentName, className, motionLabel, data, calibration: calib, pngBlob,
         fit, origin: st.origin, fps: parseFloat($('fm-track-fps').value) || null,
@@ -976,20 +978,22 @@ function _drawBox(ctx, k) {
 
 // ─── 결과 화면 카드 배치 (GridStack) ─────────────────────────
 // 학생이 카드 제목줄을 끌어 옮기고 모서리로 크기를 바꾼다. 배치는 기기(localStorage)에 기억.
-const LAYOUT_KEY = 'fmrLayout:v2';
+const LAYOUT_KEY = 'fmrLayout:v3';
 const LAYOUT_DEFAULT = {
   12: {
-    xt:    { x: 0, y: 0, w: 4, h: 8 }, yt:      { x: 4, y: 0,  w: 4, h: 8 },
-    xy:    { x: 0, y: 8, w: 4, h: 8 }, table:   { x: 4, y: 8,  w: 4, h: 8 },
-    fit:   { x: 8, y: 0, w: 4, h: 5 }, student: { x: 8, y: 5,  w: 4, h: 3 },
-    bridge:{ x: 8, y: 8, w: 4, h: 5 }, save:    { x: 8, y: 13, w: 4, h: 4 },
+    track: { x: 0, y: 0,  w: 4, h: 8 }, xt:      { x: 4, y: 0,  w: 4, h: 8 },
+    yt:    { x: 0, y: 8,  w: 4, h: 8 }, xy:      { x: 4, y: 8,  w: 4, h: 8 },
+    table: { x: 0, y: 16, w: 8, h: 7 },
+    fit:   { x: 8, y: 0,  w: 4, h: 5 }, student: { x: 8, y: 5,  w: 4, h: 3 },
+    bridge:{ x: 8, y: 8,  w: 4, h: 5 }, save:    { x: 8, y: 13, w: 4, h: 4 },
   },
   // 좁은 화면: 한 줄로 — 회귀·제출을 그래프보다 위에
   1: {
     fit:   { x: 0, y: 0,  w: 1, h: 5 }, student: { x: 0, y: 5,  w: 1, h: 3 },
     bridge:{ x: 0, y: 8,  w: 1, h: 5 }, save:    { x: 0, y: 13, w: 1, h: 4 },
-    xt:    { x: 0, y: 17, w: 1, h: 8 }, yt:      { x: 0, y: 25, w: 1, h: 8 },
-    xy:    { x: 0, y: 33, w: 1, h: 8 }, table:   { x: 0, y: 41, w: 1, h: 9 },
+    track: { x: 0, y: 17, w: 1, h: 8 }, xt:      { x: 0, y: 25, w: 1, h: 8 },
+    yt:    { x: 0, y: 33, w: 1, h: 8 }, xy:      { x: 0, y: 41, w: 1, h: 8 },
+    table: { x: 0, y: 49, w: 1, h: 9 },
   },
 };
 let _grid = null, _gridCols = 0, _applyingLayout = false;
@@ -1059,6 +1063,46 @@ function _resetLayout() {
   _applyLayout();
 }
 
+// 보고서에 들어갈 카드 배치 — 결과 화면 배치(12열)에서 조작용 카드를 빼고 빈칸을 위로 당겨 붙인다
+const REPORT_CARDS = ['track', 'xt', 'yt', 'xy', 'table', 'fit'];
+function _reportLayout() {
+  let pos;
+  if (_grid && _gridCols === 12) {
+    pos = Object.fromEntries(_grid.getGridItems().map(el => {
+      const n = el.gridstackNode;
+      return [el.getAttribute('gs-id'), { x: n.x, y: n.y, w: n.w, h: n.h }];
+    }));
+  } else {
+    pos = _layoutFor(12);      // 좁은 화면에서는 저장된(없으면 기본) 12열 배치 사용
+  }
+  const items = REPORT_CARDS.filter(id => pos[id]).map(id => ({ id, ...pos[id] }))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  const placed = [];
+  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  for (const it of items) {
+    let y = 0;
+    while (y < it.y && placed.some(p => hit({ ...it, y }, p))) y++;
+    placed.push({ ...it, y: Math.min(y, it.y) });
+  }
+  return placed;
+}
+
+function _download(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+// 결과 화면 '궤적 이미지' 카드 — 영상 위에 점을 찍은 부분을 잘라 보여준다 (보고서에도 그대로 사용)
+function _drawTrackCard() {
+  const src = cropTrajectoryCanvas(_exportTrackingCanvas(), tracker.points);
+  const dst = $('fm-track-img');
+  if (!src || !dst) return;
+  dst.width = src.width; dst.height = src.height;
+  dst.getContext('2d').drawImage(src, 0, 0);
+}
+
 // ─── 보고서 입력값 (PNG 다운로드·과제 제출 공통) ───────────────
 function _reportInputs() {
   _redraw();
@@ -1070,6 +1114,8 @@ function _reportInputs() {
     date:        new Date().toLocaleDateString('ko-KR').replace(/\s/g, ''),
     motionLabel: $('fm-motion-name').value.trim()   || '자유물체운동',
     trackingCanvas: cropTrajectoryCanvas(_exportTrackingCanvas(), tracker.points),
+    trackCanvas: $('fm-track-img'),
+    layout: _reportLayout(),
     data, fit, calibration: calib,
     fitLines: fitSummaryLines(fit, calib.unit),
     chartCanvases: {
@@ -1102,9 +1148,11 @@ async function _submitToAssignment() {
   setBridgeStatus('☁ 결과를 과제에 올리는 중...');
   try {
     const r = _reportInputs();
-    const pngBlob = await renderFreeMotionReportBlob(r);
+    const pngBlob   = await renderFreeMotionLayoutBlob(r);
+    const trackBlob = await new Promise(res => r.trackCanvas.toBlob(res, 'image/png'));
     await submitExperimentResult({
-      pngBlob,
+      pngBlob, trackBlob,
+      layout: r.layout,
       studentName: $('fm-student-class').value.trim()
         ? `${$('fm-student-class').value.trim()} ${r.studentName}` : r.studentName,
       motionLabel: r.motionLabel,

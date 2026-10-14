@@ -269,6 +269,144 @@ function _fmTable(ctx, data, unit, x, y, width) {
 
 // ── 헬퍼 ─────────────────────────────────────────────
 
+// ── 자유 물체 운동: 결과 화면 배치 그대로의 보고서 PNG ─────────────────
+// layout: [{id, x, y, w, h}] — 결과 화면 GridStack 12열 기준(조작 카드 제외, 위로 당겨 붙인 것)
+export const REPORT_ROW_RATIO = 40 / 104;
+export const REPORT_CARD_TITLES = {
+  track: '궤적 이미지', xt: 'x-t 그래프', yt: 'y-t 그래프', xy: '궤적 (x-y)',
+  table: '측정 데이터', fit: '회귀 분석',
+};
+
+export async function renderFreeMotionLayoutBlob({
+  studentName, className, date, motionLabel,
+  calibration, layout, trackCanvas, chartCanvases, data, fitLines = [],
+}) {
+  const W = 1600, PAD = 24, HDR = 92, GAP = 12, FOOT = 40;
+  const cols  = Math.max(1, ...layout.map(c => c.x + c.w));   // 쓰인 열만으로 폭을 채운다
+  const colW  = (W - PAD * 2) / cols;
+  const ROW   = colW * REPORT_ROW_RATIO;   // 화면과 같은 가로세로 비율 (1280px 화면: 열 104px, 행 40px)
+  const rows  = Math.max(1, ...layout.map(c => c.y + c.h));
+  const H     = HDR + rows * ROW + FOOT;
+  const unit  = calibration.unit;
+
+  const oc  = new OffscreenCanvas(W, H);
+  const ctx = oc.getContext('2d');
+  ctx.fillStyle = '#f5f7fa'; ctx.fillRect(0, 0, W, H);
+
+  // 머리말
+  ctx.fillStyle = '#1a1a2e'; ctx.font = 'bold 30px sans-serif';
+  ctx.fillText(motionLabel, PAD, 44);
+  ctx.font = '20px sans-serif'; ctx.fillStyle = '#424242';
+  ctx.fillText(`이름: ${studentName}   학번: ${className}   날짜: ${date}`, PAD, 76);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#757575'; ctx.font = '16px sans-serif';
+  ctx.fillText(_calibText(calibration), W - PAD, 76);
+  ctx.textAlign = 'left';
+
+  const charts = { xt: chartCanvases.xtChart, yt: chartCanvases.ytChart, xy: chartCanvases.xyChart };
+
+  for (const c of layout) {
+    const x = PAD + c.x * colW + GAP / 2, y = HDR + c.y * ROW + GAP / 2;
+    const w = c.w * colW - GAP,           h = c.h * ROW - GAP;
+    // 카드 틀 + 제목줄
+    ctx.save();
+    _roundRectPath(ctx, x, y, w, h, 12);
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.strokeStyle = '#dde3ee'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.clip();
+    ctx.fillStyle = '#1565c0'; ctx.font = 'bold 19px sans-serif';
+    ctx.fillText(REPORT_CARD_TITLES[c.id] || c.id, x + 16, y + 30);
+    _hline(ctx, y + 44, x, x + w, '#e3e8f0');
+
+    const cx = x + 14, cy = y + 54, cw = w - 28, ch = h - 66;
+    if (c.id === 'track') {
+      ctx.fillStyle = '#111'; ctx.fillRect(cx, cy, cw, ch);
+      _drawFit(ctx, trackCanvas, cx, cy, cw, ch);
+    } else if (charts[c.id]) {
+      _drawFit(ctx, charts[c.id], cx, cy, cw, ch);
+    } else if (c.id === 'fit') {
+      ctx.fillStyle = '#212121';
+      _wrapLines(ctx, fitLines, cx, cy + 4, cw, ch, 18);
+    } else if (c.id === 'table') {
+      _fitTable(ctx, data, unit, cx, cy, cw, ch);
+    }
+    ctx.restore();
+  }
+
+  ctx.fillStyle = '#9e9e9e'; ctx.font = '14px sans-serif';
+  ctx.fillText('Motion Tracker — 자유 물체 운동 분석 보고서', PAD, H - 14);
+  return oc.convertToBlob({ type: 'image/png' });
+}
+
+function _calibText(calibration) {
+  return calibration.isCalibrated
+    ? `보정: ${calibration.pixelDistance?.toFixed(1)}px = ${calibration.realLengthCm}cm  (${calibration.scale?.toFixed(4)} cm/px)`
+    : '보정: 미설정 (px 단위)';
+}
+
+function _roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) { ctx.roundRect(x, y, w, h, r); return; }
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+// 문단 목록을 폭에 맞춰 줄바꿈 — 영역을 넘치면 글자를 줄여 다시 시도
+function _wrapLines(ctx, lines, x, y, w, h, size) {
+  for (let fs = size; fs >= 11; fs -= 1) {
+    ctx.font = `${fs}px sans-serif`;
+    const lh = Math.round(fs * 1.5), out = [];
+    for (const line of lines) {
+      let cur = '';
+      for (const word of line.split(' ')) {
+        const next = cur ? cur + ' ' + word : word;
+        if (ctx.measureText(next).width > w && cur) { out.push(cur); cur = word; } else cur = next;
+      }
+      out.push(cur);
+    }
+    if (out.length * lh <= h || fs === 11) {
+      out.forEach((l, i) => ctx.fillText(l, x, y + fs + i * lh));
+      return;
+    }
+  }
+}
+
+// 측정 데이터표 — 열 폭은 내용 길이에 맞추고, 행이 많으면 글자를 줄인다
+function _fitTable(ctx, data, unit, x, y, w, h) {
+  const head = ['#', '시간(s)', `x (${unit})`, `Δx`, `y (${unit})`, `Δy`];
+  const f = (v, d = 2) => (v != null && isFinite(v)) ? v.toFixed(d) : '-';
+  const rows = data.map((p, i) => {
+    const q = data[i - 1];
+    return [String(i + 1), f(p.relTSec, 3), f(p.relXCm),
+            q ? f(p.relXCm - q.relXCm) : '-', f(p.relYCm), q ? f(p.relYCm - q.relYCm) : '-'];
+  });
+  const rowH = Math.max(14, Math.min(30, h / (rows.length + 1)));
+  const fs   = Math.max(10, Math.round(rowH * 0.52));
+  ctx.font = `bold ${fs}px sans-serif`;
+  const colW = head.map((hd, j) => Math.max(
+    ctx.measureText(hd).width,
+    ...rows.map(r => ctx.measureText(r[j]).width)) + fs * 1.4);
+  const scale = Math.min(1, w / colW.reduce((a, b) => a + b, 0));
+  const cws   = colW.map(c => c * scale);
+  const tw    = cws.reduce((a, b) => a + b, 0);
+
+  ctx.fillStyle = '#1565c0'; ctx.fillRect(x, y, tw, rowH);
+  const drawRow = (cells, ry, bold, color) => {
+    ctx.font = `${bold ? 'bold ' : ''}${fs}px sans-serif`; ctx.fillStyle = color; ctx.textAlign = 'right';
+    let cx = x;
+    cells.forEach((t, j) => { ctx.fillText(t, cx + cws[j] - fs * 0.6, ry + rowH * 0.68); cx += cws[j]; });
+    ctx.textAlign = 'left';
+  };
+  drawRow(head, y, true, '#ffffff');
+  rows.forEach((r, i) => {
+    const ry = y + rowH * (i + 1);
+    if (ry + rowH > y + h + 1) return;
+    ctx.fillStyle = i % 2 ? '#ffffff' : '#f5f7fa'; ctx.fillRect(x, ry, tw, rowH);
+    drawRow(r, ry, false, '#212121');
+  });
+  ctx.strokeStyle = '#dde3ee'; ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, tw, Math.min(h, rowH * (rows.length + 1)));
+}
+
 function _hline(ctx, y, x0, x1, color) {
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;

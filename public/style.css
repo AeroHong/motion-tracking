@@ -2220,3 +2220,5 @@ body.lock-viewport #app { height: 100vh; height: 100dvh; min-height: 0; overflow
   background: #fff; color: #4f46e5; border: 2px solid #6366f1; font-weight: 700;
 }
 .btn-essay:hover { background: #eef2ff; }
+
+.fmr-track-img { width: 100%; height: 100%; object-fit: contain; background: #111; border-radius: 6px; }
