@@ -8,11 +8,15 @@ import { AutoTracker }               from './autotracker.js';
 import { GraphRenderer }             from './graphs.js';
 import { pickVideoFromDrive }        from './drivePicker.js';
 import { generateFreeMotionReport,
+         renderFreeMotionReportBlob,
          cropTrajectoryCanvas }               from './report.js';
+import { getBridge, getEssayUser, essayLogin,
+         submitExperimentResult, setBridgeStatus } from './essayBridge.js';
+import { auth }                              from './auth.js';
 import { saveFreeMotionReportToCloud,
          loadAllFreeMotionReports,
          deleteFreeMotionReport }             from './saveReport.js';
-import { makeDraggable }                     from './utils.js';
+import { makeDraggable, fitProjectile }      from './utils.js';
 
 const $ = id => document.getElementById(id);
 
@@ -231,27 +235,16 @@ function _bindTrack() {
     btn.disabled = true; btn.textContent = '생성 중...';
     const statusEl = $('fm-cloud-save-status');
     try {
-      const studentName  = $('fm-student-name').value.trim()  || '이름없음';
-      const className    = $('fm-student-class').value.trim() || '00000';
-      const date         = new Date().toLocaleDateString('ko-KR').replace(/\s/g, '');
-      const motionLabel  = $('fm-motion-name').value.trim()   || '자유물체운동';
-      _redraw();
-      const data = _getData();
-      const croppedCanvas = cropTrajectoryCanvas($('fm-canvas'), tracker.points);
-      const pngBlob = await generateFreeMotionReport({
-        studentName, className, date, motionLabel,
-        trackingCanvas: croppedCanvas,
-        data, calibration: calib,
-        chartCanvases: {
-          xtChart: $('fm-chart-xt'),
-          ytChart: $('fm-chart-yt'),
-          xyChart: $('fm-chart-xy'),
-        },
-      });
+      const r = _reportInputs();
+      const { studentName, className, motionLabel, data, fit } = r;
+      const pngBlob = await generateFreeMotionReport(r);
 
       if (statusEl) { statusEl.textContent = '☁ 저장 중...'; statusEl.style.color = 'var(--text-dim)'; }
       try {
-        await saveFreeMotionReportToCloud({ studentName, className, motionLabel, data, calibration: calib, pngBlob });
+        await saveFreeMotionReportToCloud({
+          studentName, className, motionLabel, data, calibration: calib, pngBlob,
+          fit, origin: st.origin, fps: parseFloat($('fm-track-fps').value) || null,
+        });
         if (statusEl) { statusEl.textContent = '✅ 저장 완료 — 목록에 추가됨'; statusEl.style.color = '#2e7d32'; }
         _checkFreeReport();
       } catch (cloudErr) {
@@ -264,6 +257,8 @@ function _bindTrack() {
       btn.disabled = false; btn.textContent = '📄 보고서 저장 (PNG)';
     }
   });
+
+  $('fm-btn-bridge-submit')?.addEventListener('click', _submitToAssignment);
 
   // 자동 추적
   $('fm-btn-start-auto').addEventListener('click', () => _runAuto(false));
@@ -706,7 +701,72 @@ function _drawBox(cvs) {
   ctx.restore();
 }
 
+// ─── 보고서 입력값 (PNG 다운로드·과제 제출 공통) ───────────────
+function _reportInputs() {
+  _redraw();
+  const data = _getData();
+  const fit  = _getFit(data);
+  return {
+    studentName: $('fm-student-name').value.trim()  || '이름없음',
+    className:   $('fm-student-class').value.trim() || '00000',
+    date:        new Date().toLocaleDateString('ko-KR').replace(/\s/g, ''),
+    motionLabel: $('fm-motion-name').value.trim()   || '자유물체운동',
+    trackingCanvas: cropTrajectoryCanvas($('fm-canvas'), tracker.points),
+    data, fit, calibration: calib,
+    fitLines: fitSummaryLines(fit, calib.unit),
+    chartCanvases: {
+      xtChart: $('fm-chart-xt'),
+      ytChart: $('fm-chart-yt'),
+      xyChart: $('fm-chart-xy'),
+    },
+  };
+}
+
+// ─── 과제에 결과 제출 (essayBridge.js) ───────────────────────
+async function _submitToAssignment() {
+  if (!getBridge()) return;
+  const btn = $('fm-btn-bridge-submit');
+  // 팝업 차단을 피하려고 로그인은 클릭 직후 await 없이 바로 시작한다
+  if (!getEssayUser()) {
+    try { await essayLogin(auth.currentUser?.email); }
+    catch (e) {
+      if (e?.code !== 'auth/popup-closed-by-user') alert('과제 계정 연결 실패: ' + (e.message || e.code));
+      return;
+    }
+  }
+  if (tracker.points.length === 0) { alert('추적한 점이 없습니다.'); return; }
+  if (!calib.isCalibrated &&
+      !confirm('기준 보정 없이 px 단위로 제출합니다. 계속할까요?\n(보정하려면 트래킹 화면에서 "보정"으로 자의 두 끝을 찍으세요)')) return;
+  if (tracker.points.length < 4 &&
+      !confirm('점이 4개 미만이라 회귀 분석값이 없습니다. 그래도 제출할까요?')) return;
+
+  btn.disabled = true; btn.textContent = '제출 중...';
+  setBridgeStatus('☁ 결과를 과제에 올리는 중...');
+  try {
+    const r = _reportInputs();
+    const pngBlob = await renderFreeMotionReportBlob(r);
+    await submitExperimentResult({
+      pngBlob,
+      studentName: $('fm-student-class').value.trim()
+        ? `${$('fm-student-class').value.trim()} ${r.studentName}` : r.studentName,
+      motionLabel: r.motionLabel,
+      unit: calib.unit,
+      data: r.data, fit: r.fit, calibration: calib,
+      origin: st.origin,
+      fps: parseFloat($('fm-track-fps').value) || null,
+    });
+    setBridgeStatus(`✅ 제출 완료 (${new Date().toLocaleTimeString('ko-KR')}) — 보고서 작성 화면에 결과가 표시됩니다.`, '#2e7d32');
+    $('fm-btn-bridge-return').classList.toggle('hidden', !getBridge().returnUrl);
+  } catch (e) {
+    console.error('과제 제출 실패:', e);
+    setBridgeStatus('⚠ ' + (e.message || '제출에 실패했습니다.'), '#e65100');
+  } finally {
+    btn.disabled = false; btn.textContent = '📤 과제에 결과 제출';
+  }
+}
+
 // ─── 결과 화면 정보 표시 ──────────────────────────────────────
+
 function _updateResultInfo() {
   const originEl = $('fm-result-origin-info');
   const coordEl  = $('fm-result-origin-coords');
@@ -733,10 +793,39 @@ function _renderGraphs() {
   const unit  = calib.unit;
   const label = $('fm-motion-name').value.trim() || '자유 물체 운동';
   if (data.length === 0) return;
-  graphs.renderFreeXT($('fm-chart-xt'), data, unit, label);
-  graphs.renderFreeYT($('fm-chart-yt'), data, unit, label);
+  const fit = _getFit(data);
+  graphs.renderFreeXT($('fm-chart-xt'), data, unit, label, fit);
+  graphs.renderFreeYT($('fm-chart-yt'), data, unit, label, fit);
   graphs.renderFreeXY($('fm-chart-xy'), data, unit, label);
   _renderTable(data, unit);
+  _renderFitInfo(fit, unit);
+}
+
+// 점 4개 이상일 때만 회귀 (3점 2차 피팅은 항상 R²=1이라 의미 없음)
+const MIN_FIT_POINTS = 4;
+
+function _getFit(data) {
+  return data.length >= MIN_FIT_POINTS ? fitProjectile(data) : null;
+}
+
+// 결과 화면·보고서 PNG가 같은 문구를 쓰도록 한 곳에서 생성
+export function fitSummaryLines(fit, unit) {
+  if (!fit) return [`회귀 분석: 점이 ${MIN_FIT_POINTS}개 이상 필요합니다.`];
+  const f = (v, d) => (v != null && isFinite(v)) ? v.toFixed(d) : '-';
+  const lines = [
+    `x-t 1차 회귀: vx = ${f(fit.vx, 2)} ${unit}/s  (R² = ${f(fit.vxR2, 4)})`,
+    `y-t 2차 회귀: a = ${f(fit.ay, 1)} ${unit}/s²  (R² = ${f(fit.ayR2, 4)}, 아래 방향 +)`,
+  ];
+  if (unit === 'cm' && fit.ay != null) {
+    lines.push(`→ 가속도 ${f(fit.ay / 100, 2)} m/s²  (중력가속도 9.8 m/s²와 비교: 오차 ${f(Math.abs(fit.ay / 100 - 9.8) / 9.8 * 100, 1)}%)`);
+  }
+  return lines;
+}
+
+function _renderFitInfo(fit, unit) {
+  const el = $('fm-fit-info');
+  if (!el) return;
+  el.innerHTML = fitSummaryLines(fit, unit).map(l => `<div>${l}</div>`).join('');
 }
 
 function _renderTable(data, unit) {

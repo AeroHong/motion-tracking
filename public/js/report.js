@@ -136,12 +136,13 @@ export async function generateFreeMotionReport(options) {
   return blob;
 }
 
-async function renderFreeMotionReportBlob({
+export async function renderFreeMotionReportBlob({
   studentName, className, date, motionLabel,
   trackingCanvas,
   data,
   calibration,
   chartCanvases,
+  fitLines = [],
 }) {
   const W   = 1600;
   const PAD = 32;
@@ -161,8 +162,12 @@ async function renderFreeMotionReportBlob({
   const grY     = grLblY + 28;
   const grBotY  = grY + GR_H;
 
+  const FIT_LINE_H = 26;
+  const fitY    = grBotY + 52;
+  const fitBotY = fitY + 28 + FIT_LINE_H * fitLines.length;
+
   const ROW_H   = 30;
-  const tableY  = grBotY + 52;
+  const tableY  = (fitLines.length ? fitBotY : grBotY) + 52;
   const H       = tableY + ROW_H * (data.length + 1) + 80;
 
   const oc  = new OffscreenCanvas(W, H);
@@ -199,6 +204,15 @@ async function renderFreeMotionReportBlob({
     ctx.strokeRect(grX[i], grY, GR_COL_W, GR_H);
   });
   _hline(ctx, grBotY + 16, PAD, W - PAD, '#e0e0e0');
+
+  // 회귀 분석
+  if (fitLines.length) {
+    _lbl(ctx, '회귀 분석', PAD, fitY);
+    ctx.fillStyle = '#212121';
+    ctx.font = '17px sans-serif';
+    fitLines.forEach((l, i) => ctx.fillText(l, PAD, fitY + 30 + FIT_LINE_H * i));
+    _hline(ctx, fitBotY + 16, PAD, W - PAD, '#e0e0e0');
+  }
 
   // 데이터표
   _fmTable(ctx, data, unit, PAD, tableY, W - PAD * 2);

@@ -76,6 +76,19 @@ import { GraphRenderer }                        from './graphs.js';
 import { generateReport, cropTrajectoryCanvas }   from './report.js';
 import { saveReportToCloud, loadAllReportsMeta, deleteClassicReport } from './saveReport.js';
 import { pickVideoFromDrive } from './drivePicker.js';
+import { readBridgeParams, getBridge, startBridgeUI } from './essayBridge.js';
+
+// essay-platform 과제 링크(?assignment=...)로 들어왔는지 — 로그인 전에 먼저 읽어 주소창을 정리한다
+readBridgeParams();
+// 브라우저에 예전 index.html이 캐시돼 있으면(과제 배너 없음) 한 번만 새로고침해 최신 화면을 받는다
+if (!document.getElementById('essay-bridge-banner')) {
+  try {
+    if (!sessionStorage.getItem('staleHtmlReloaded')) {
+      sessionStorage.setItem('staleHtmlReloaded', '1');
+      location.reload();
+    }
+  } catch { /* sessionStorage 사용 불가 시 무시 */ }
+}
 
 
 const $ = id => document.getElementById(id);
@@ -132,7 +145,14 @@ initAuth(
     currentUser = user;
     $('user-name').textContent = user.email;
     $('btn-logout').classList.remove('hidden');
-    showScreen('mode');
+    // 과제 연결 상태면 모드 선택을 건너뛰고 해당 분석 화면으로 바로 들어간다
+    if (getBridge()) {
+      showScreen('free-upload');
+      startBridgeUI(user);
+    } else {
+      showScreen('mode');
+    }
+
   },
   () => {
     currentUser = null;

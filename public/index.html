@@ -43,6 +43,19 @@
     </div>
   </header>
 
+  <!-- ── 과제 연결 배너 (essay-platform에서 [실험 시작]으로 들어왔을 때) ── -->
+  <div id="essay-bridge-banner" class="essay-bridge-banner hidden">
+    <div class="ebb-info">
+      <span class="ebb-tag">📋 과제</span>
+      <b id="ebb-title">과제 정보를 불러오는 중...</b>
+      <span id="ebb-meta" class="ebb-meta"></span>
+    </div>
+    <div class="ebb-actions">
+      <button id="ebb-btn-login" class="btn-primary hidden">🔗 과제 계정 연결</button>
+      <button id="ebb-btn-return" class="btn-ghost hidden">← 보고서 작성으로</button>
+    </div>
+  </div>
+
   <!-- ── Step 1: 로그인 ─────────────────────────── -->
   <section id="screen-login">
     <h2>Motion Tracker</h2>
@@ -370,8 +383,19 @@
     </div>
 
     <!-- 클라우드 저장 상태 -->
+    <!-- 과제 제출 (과제 연결 상태에서만 표시) -->
+    <div id="fm-bridge-section" class="result-section hidden">
+      <h3>📤 과제에 결과 제출</h3>
+      <p id="fm-bridge-status" style="font-size:14px;color:var(--text-dim);">분석이 끝나면 아래 버튼으로 결과를 과제에 제출하세요. 다시 제출하면 최신 결과로 바뀝니다.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+        <button id="fm-btn-bridge-submit" class="btn-primary">📤 과제에 결과 제출</button>
+        <button id="fm-btn-bridge-return" class="btn-secondary hidden">✍ 보고서 작성으로 돌아가기</button>
+      </div>
+    </div>
+
     <div class="result-section">
       <h3>☁ 클라우드 저장</h3>
+
       <p id="cloud-save-status" style="font-size:14px;color:var(--text-dim);">보고서를 저장하면 나중에 다시 다운로드할 수 있습니다.</p>
     </div>
 
@@ -541,6 +565,11 @@
         <div class="chart-box"><canvas id="fm-chart-yt"></canvas></div>
         <div class="chart-box"><canvas id="fm-chart-xy"></canvas></div>
       </div>
+    </div>
+    <!-- 회귀 분석 결과 -->
+    <div class="result-section">
+      <h3>회귀 분석</h3>
+      <div id="fm-fit-info" class="fm-fit-info"></div>
     </div>
     <!-- 측정 데이터 표 -->
     <div class="result-section">

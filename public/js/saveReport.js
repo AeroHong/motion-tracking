@@ -67,7 +67,10 @@ export async function deleteClassicReport({ docId, storagePath }) {
 
 // ── 자유 물체 운동 모드 ──────────────────────────────────
 
-export async function saveFreeMotionReportToCloud({ studentName, className, motionLabel, data, calibration, pngBlob }) {
+export async function saveFreeMotionReportToCloud({
+  studentName, className, motionLabel, data, calibration, pngBlob,
+  fit = null, origin = null, fps = null,
+}) {
   const user = auth.currentUser;
   if (!user) throw new Error('로그인이 필요합니다.');
 
@@ -84,6 +87,10 @@ export async function saveFreeMotionReportToCloud({ studentName, className, moti
     unit: calibration.unit,
     createdAt: Timestamp.now(),
     storagePath,
+    calib: calibration.isCalibrated
+      ? { scale: calibration.scale, realLengthCm: calibration.realLengthCm, pxDist: calibration.pixelDistance }
+      : null,
+    origin, fps, fit,
     points: data.map(p => ({
       t: +(p.relTSec?.toFixed(4) ?? 0),
       x: +(p.relXCm?.toFixed(3)  ?? 0),

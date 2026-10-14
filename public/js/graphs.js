@@ -112,19 +112,34 @@ export class GraphRenderer {
 
   _legend() { return { legend: { labels: { color: LEGEND_COLOR } } }; }
 
+  // 회귀 곡선: 측정 구간을 40등분해 매끄러운 점선으로
+  _fitLine(data, f, label) {
+    const t1 = data[data.length - 1].relTSec;
+    const pts = Array.from({ length: 41 }, (_, i) => { const t = t1 * i / 40; return { x: t, y: f(t) }; });
+    return {
+      label, data: pts,
+      borderColor: '#555', backgroundColor: 'transparent',
+      pointRadius: 0, showLine: true, borderWidth: 1.5, borderDash: [6, 4],
+    };
+  }
+
   // ── 자유 물체 운동 그래프 ──────────────────────────────────
-  renderFreeXT(canvasEl, data, unit = 'cm', label = '물체') {
+  // fit: utils.fitProjectile() 결과 (없으면 피팅선 생략)
+  renderFreeXT(canvasEl, data, unit = 'cm', label = '물체', fit = null) {
     this._destroy('freeXT');
+    const datasets = [{
+      label: `x (${unit})`,
+      data: data.map(d => ({ x: d.relTSec, y: d.relXCm })),
+      borderColor: '#1565c0', backgroundColor: 'rgba(21,101,192,0.65)',
+      pointRadius: 5, showLine: true, borderWidth: 1.5,
+    }];
+    if (fit?.vx != null) {
+      datasets.push(this._fitLine(data, t => fit.x0 + fit.vx * t,
+        `피팅 x = ${fit.x0.toFixed(2)} + ${fit.vx.toFixed(2)}t`));
+    }
     this.charts['freeXT'] = new Chart(canvasEl, {
       type: 'scatter',
-      data: {
-        datasets: [{
-          label: `x (${unit})`,
-          data: data.map(d => ({ x: d.relTSec, y: d.relXCm })),
-          borderColor: '#1565c0', backgroundColor: 'rgba(21,101,192,0.65)',
-          pointRadius: 5, showLine: true, borderWidth: 1.5,
-        }]
-      },
+      data: { datasets },
       options: {
         ...this._freeBase('시간 (s)', `x 위치 (${unit})`),
         plugins: { ...this._legend(), title: { display: true, text: `${label} — x-t 그래프`, color: TITLE_COLOR } }
@@ -132,18 +147,21 @@ export class GraphRenderer {
     });
   }
 
-  renderFreeYT(canvasEl, data, unit = 'cm', label = '물체') {
+  renderFreeYT(canvasEl, data, unit = 'cm', label = '물체', fit = null) {
     this._destroy('freeYT');
+    const datasets = [{
+      label: `y (${unit})`,
+      data: data.map(d => ({ x: d.relTSec, y: d.relYCm })),
+      borderColor: '#c62828', backgroundColor: 'rgba(198,40,40,0.65)',
+      pointRadius: 5, showLine: true, borderWidth: 1.5,
+    }];
+    if (fit?.ay != null) {
+      datasets.push(this._fitLine(data, t => fit.y0 + fit.vy0 * t + 0.5 * fit.ay * t * t,
+        `피팅 y = ${fit.y0.toFixed(2)} + ${fit.vy0.toFixed(2)}t + ½·${fit.ay.toFixed(1)}t²`));
+    }
     this.charts['freeYT'] = new Chart(canvasEl, {
       type: 'scatter',
-      data: {
-        datasets: [{
-          label: `y (${unit})`,
-          data: data.map(d => ({ x: d.relTSec, y: d.relYCm })),
-          borderColor: '#c62828', backgroundColor: 'rgba(198,40,40,0.65)',
-          pointRadius: 5, showLine: true, borderWidth: 1.5,
-        }]
-      },
+      data: { datasets },
       options: {
         ...this._freeBase('시간 (s)', `y 위치 (${unit})`),
         plugins: { ...this._legend(), title: { display: true, text: `${label} — y-t 그래프`, color: TITLE_COLOR } }

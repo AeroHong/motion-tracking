@@ -1,11 +1,12 @@
 // sw.js — 서비스 워커 (PWA 홈 화면 설치용)
 // 버전 업데이트 시 CACHE 이름을 바꾸면 구 캐시가 자동 삭제됨
-const CACHE = 'motion-v34';
+const CACHE = 'motion-v36';
 const PRECACHE = ['/', '/index.html', '/style.css', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting())
+    // cache:'reload' — 브라우저 HTTP 캐시에 남은 예전 파일을 미리 저장하지 않도록
+    caches.open(CACHE).then(c => c.addAll(PRECACHE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())
   );
 });
 
@@ -35,7 +36,8 @@ self.addEventListener('fetch', e => {
   // → 배포 즉시 최신 HTML 수신, 오프라인에서도 구동 가능
   if (url.pathname === '/' || url.pathname.endsWith('.html')) {
     e.respondWith(
-      fetch(e.request)
+      // HTTP 캐시를 거치지 않고 서버에 확인 (navigate 요청은 init을 못 붙여 URL로 다시 요청)
+      fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
         .then(res => {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));

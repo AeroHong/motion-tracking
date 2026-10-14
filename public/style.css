@@ -2051,3 +2051,21 @@ input[type="file"] {
   font-variant-numeric: tabular-nums;
   border: 1px solid rgba(255,255,255,0.15);
 }
+
+/* 자유 물체 운동 — 회귀 분석 결과 */
+.fm-fit-info { display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.5; }
+
+/* ── 과제 연결 배너 (essayBridge.js) ── */
+.essay-bridge-banner {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 8px 16px;
+  background: rgba(99,102,241,0.12);
+  border-bottom: 1px solid rgba(99,102,241,0.35);
+  font-size: 14px;
+}
+.ebb-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.ebb-tag { background: #6366f1; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
+.ebb-meta { color: var(--text-dim); font-size: 13px; }
+.ebb-meta .ebb-warn { color: #ffa726; font-weight: 600; }
+.ebb-actions { display: flex; gap: 8px; }
+.ebb-actions button { min-height: 48px; }
