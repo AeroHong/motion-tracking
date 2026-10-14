@@ -954,7 +954,8 @@ function _fit() {
   const availW = trackMain.clientWidth;
   if (!availW) return; // 화면이 숨겨진 상태
 
-  const headerH = document.querySelector('header')?.offsetHeight || 0;
+  // 트래킹 영역 위쪽 높이 (헤더 + 과제 배너 등) — 헤더만 빼면 배너만큼 아래로 밀려 스크롤이 생긴다
+  const topH = trackMain.getBoundingClientRect().top + window.scrollY;
 
   let siblingH = 0;
   for (const el of trackMain.children) {
@@ -963,7 +964,7 @@ function _fit() {
     siblingH += el.offsetHeight;
   }
 
-  const availH = window.innerHeight - headerH - siblingH;
+  const availH = window.innerHeight - topH - siblingH;
   if (availH <= 0) return;
 
   const scale = Math.min(availW / cvs.width, availH / cvs.height);

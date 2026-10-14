@@ -240,6 +240,11 @@ input[type="file"] {
   min-height: 0;
 }
 
+/* 트래킹 화면 표시 중(app.js showScreen): 페이지를 화면 높이에 고정해 세로 스크롤을 없앤다.
+   영상 확대·축소·이동은 캔버스 안에서(ZoomController) 처리 */
+body.lock-viewport { overflow: hidden; }
+body.lock-viewport #app { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+
 /* ── 이중슬릿 분석 화면 ── */
 #screen-slit-analyze {
   display: flex;

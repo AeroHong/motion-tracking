@@ -276,6 +276,8 @@ function showScreen(name) {
   // 로그인·트래킹 화면에서는 푸터 숨김, 나머지는 표시
   const hideFooter = ['login', 'track', 'free-track', 'slit-analyze', 'slit-report', 'diff-analyze', 'diff-report'].includes(name);
   $('app-footer')?.classList.toggle('hidden', hideFooter);
+  // 트래킹 화면은 화면 높이에 고정 — 세로 스크롤 없이 영상 영역만 남은 공간에 맞춘다
+  document.body.classList.toggle('lock-viewport', ['track', 'free-track'].includes(name));
 }
 
 // ── 영상 업로드 ───────────────────────────────────────
@@ -381,8 +383,8 @@ function fitCanvases() {
   const availW = trackMain.clientWidth;
   if (!availW) return; // 화면이 숨겨진 상태
 
-  // 헤더 높이
-  const headerH = document.querySelector('header')?.offsetHeight || 0;
+  // 트래킹 영역 위쪽 높이 (헤더 + 과제 배너 등)
+  const topH = trackMain.getBoundingClientRect().top + window.scrollY;
 
   // canvas-wrapper를 제외한 visible 형제 요소 높이 합산
   let siblingH = 0;
@@ -393,7 +395,7 @@ function fitCanvases() {
   }
 
   // 실제 뷰포트 기준 가용 높이 (4K·모바일 모두 정확)
-  const availH = window.innerHeight - headerH - siblingH;
+  const availH = window.innerHeight - topH - siblingH;
   if (availH <= 0) return;
 
   [ffCanvas, projCanvas].forEach(canvas => {
