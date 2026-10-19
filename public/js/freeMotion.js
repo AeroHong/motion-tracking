@@ -15,7 +15,7 @@ import { onAuthStateChanged }      from 'https://www.gstatic.com/firebasejs/10.1
 import { renderFreeMotionLayoutBlob,
          cropTrajectoryCanvas }               from './report.js';
 import { getBridge, getEssayUser, essayLogin,
-         submitExperimentResult, setBridgeStatus } from './essayBridge.js';
+         submitExperimentResult, setBridgeStatus, essayLoginErrorMessage } from './essayBridge.js';
 import { auth }                              from './auth.js';
 import { saveFreeMotionReportToCloud,
          loadAllFreeMotionReports,
@@ -1134,7 +1134,9 @@ async function _submitToAssignment() {
   if (!getEssayUser()) {
     try { await essayLogin(auth.currentUser?.email); }
     catch (e) {
-      if (e?.code !== 'auth/popup-closed-by-user') alert('과제 계정 연결 실패: ' + (e.message || e.code));
+      console.error('과제 계정 연결 실패:', e);
+      const msg = essayLoginErrorMessage(e);
+      if (msg) alert(msg);
       return;
     }
   }

@@ -21,7 +21,10 @@ import { getStorage, ref, uploadBytes, getDownloadURL }
 // essay-platform/src/firebase.js와 같은 공개 설정 (보안은 essay 쪽 rules가 담당)
 const ESSAY_CONFIG = {
   apiKey:            'AIzaSyAKp3ooZkJPJE-SZrL6srfmmuWIFafAayY',
-  authDomain:        'equipotential-surface.firebaseapp.com',
+  // 학교망이 *.firebaseapp.com을 막는 경우가 있어, 과제 계정 로그인 창도 essay 호스팅 주소에서 연다.
+  // (equipotential-surface의 'Web client (auto created by Google Service)'에
+  //  https://essay-hck.web.app/__/auth/handler 가 리디렉션 URI로 등록되어 있어야 한다)
+  authDomain:        'essay-hck.web.app',
   projectId:         'equipotential-surface',
   storageBucket:     'equipotential-surface.firebasestorage.app',
   messagingSenderId: '60344638100',
@@ -105,6 +108,21 @@ export async function essayLogin(hintEmail) {
   provider.setCustomParameters(hintEmail ? { login_hint: hintEmail, prompt: 'select_account' } : { prompt: 'select_account' });
   const res = await signInWithPopup(essayAuth, provider);
   return res.user;
+}
+
+// 과제 계정 연결 실패 원인을 한국어로 (auth.js의 LOGIN_ERRORS와 같은 방식)
+const ESSAY_LOGIN_ERRORS = {
+  'auth/popup-blocked':          '로그인 창이 차단되었습니다. 브라우저 주소창 오른쪽의 팝업 차단 아이콘에서 허용한 뒤 다시 눌러 주세요.',
+  'auth/network-request-failed': '네트워크 연결에 실패했습니다. 와이파이나 학교망 상태를 확인해 주세요.',
+  'auth/unauthorized-domain':    '이 주소에서는 과제 계정 연결이 허용되지 않았습니다. motion-tracking.web.app 으로 접속해 주세요.',
+  'auth/internal-error':         '로그인 처리 중 오류가 났습니다. 잠시 뒤 다시 시도해 주세요.',
+};
+
+/** 사용자가 창을 닫은 경우는 null, 그 밖에는 보여 줄 오류 문구 */
+export function essayLoginErrorMessage(e) {
+  if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return null;
+  const msg = ESSAY_LOGIN_ERRORS[e?.code] || '과제 계정 연결에 실패했습니다. 다시 시도해 주세요.';
+  return `${msg}\n\n(오류 코드: ${e?.code || e?.message || '알 수 없음'} · ${location.hostname})`;
 }
 
 export async function essayLogout() {
@@ -294,7 +312,9 @@ export function startBridgeUI(motionUser) {
   $('fm-btn-bridge-return').addEventListener('click', _goReturn);
   $('ebb-btn-login').addEventListener('click', () => {
     essayLogin(motionUser.email).catch(e => {
-      if (e?.code !== 'auth/popup-closed-by-user') alert('과제 계정 연결 실패: ' + (e.message || e.code));
+      console.error('과제 계정 연결 실패:', e);
+      const msg = essayLoginErrorMessage(e);
+      if (msg) alert(msg);
     });
   });
   onEssayAuthChanged(() => _renderAssignment(motionUser.email));
